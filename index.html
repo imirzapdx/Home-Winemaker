@@ -1,0 +1,3203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Winemaking Planner</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --burg:#722F37;--red:#8B0000;--rose:#D4798A;--rose-lt:#F9E4E8;--rose-dk:#8b3a4a;
+  --gold:#C9A84C;--gold-lt:#FEF8E7;--parch:#F5ECD7;--border:#D4C5A9;
+  --text:#2C1810;--muted:#7A6358;--bg:#FAF7F0;--oak:#5D8A5E;--inert:#2C7BB6;
+  --sv:#7B6A5A;--shadow:0 2px 8px rgba(44,24,16,.12);--r:7px;
+  --mj:#722F37;--mj-lt:#f9e8ea;
+}
+body{font-family:Georgia,'Palatino Linotype',serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+.hdr{background:var(--burg);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:16px;box-shadow:0 2px 10px rgba(0,0,0,.35);position:sticky;top:0;z-index:100}
+.hdr-title{font-size:18px;font-weight:bold;letter-spacing:.3px;white-space:nowrap}
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tab{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 14px;border-radius:var(--r);cursor:pointer;font:inherit;font-size:13px;transition:.2s}
+.tab:hover{background:rgba(255,255,255,.25)}.tab.active{background:#fff;color:var(--burg);font-weight:bold}
+#content{padding:14px;max-width:1400px;margin:0 auto}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+.panel{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--parch)}
+.pt{font-size:15px;font-weight:bold;color:var(--burg)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{background:var(--parch);padding:5px 9px;text-align:left;font-weight:bold;color:var(--muted);border-bottom:1px solid var(--border)}
+.tbl td{padding:5px 9px;border-bottom:1px solid rgba(200,184,154,.3);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}.tbl tr:hover td{background:var(--parch)}
+.btn{padding:5px 13px;border-radius:var(--r);border:none;cursor:pointer;font:inherit;font-size:13px;transition:.15s;display:inline-flex;align-items:center;gap:5px}
+.btn-p{background:var(--burg);color:#fff}.btn-p:hover{background:var(--red)}
+.btn-s{background:var(--parch);color:var(--text);border:1px solid var(--border)}.btn-s:hover{background:var(--border)}
+.btn-d{background:#c0392b;color:#fff}.btn-d:hover{background:#a93226}
+.btn-sm{padding:3px 9px;font-size:12px}.btn-xs{padding:1px 5px;font-size:11px}
+.fg{margin-bottom:10px}
+.lbl{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:bold;text-transform:uppercase;letter-spacing:.4px}
+.fc{width:100%;padding:5px 9px;border:1px solid var(--border);border-radius:var(--r);font:inherit;font-size:13px;background:#fff;color:var(--text)}
+.fc:focus{outline:none;border-color:var(--burg);box-shadow:0 0 0 2px rgba(114,47,55,.15)}
+.fc-ro{background:var(--parch)!important;cursor:default}
+.ifrm{background:var(--parch);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:10px}
+.ifrm-t{font-size:13px;font-weight:bold;color:var(--burg);margin-bottom:8px}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:bold}
+.badge-red{background:#f0dede;color:var(--red)}.badge-white{background:var(--gold-lt);color:#7a5c00}
+.badge-rose{background:var(--rose-lt);color:var(--rose-dk)}
+.badge-mj{background:var(--mj);color:#fff;font-size:10px;padding:1px 5px;border-radius:3px}
+.wines-layout{display:grid;grid-template-columns:230px 1fr;gap:14px;min-height:520px}
+.wine-sidebar{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:10px;box-shadow:var(--shadow)}
+.wine-item{padding:7px 9px;border-radius:var(--r);cursor:pointer;margin-bottom:3px;display:flex;align-items:center;gap:7px;font-size:13px;border:1px solid transparent;transition:.15s}
+.wine-item:hover{background:var(--parch)}.wine-item.active{background:var(--parch);border-color:var(--burg)}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot-red{background:var(--red)}.dot-white{background:var(--gold);border:1px solid #ccc}.dot-rose{background:var(--rose)}
+.calc-box{background:linear-gradient(135deg,var(--parch),#fff);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-top:12px}
+.calc-title{font-size:13px;font-weight:bold;color:var(--burg);margin-bottom:8px}
+.calc-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px dashed rgba(200,184,154,.4);font-size:13px}
+.calc-row:last-child{border-bottom:none}
+.cv{font-weight:bold;color:var(--burg);font-size:14px}
+.warn{color:#c0392b;font-size:12px;margin-left:4px}
+.ok{color:#1e8449;font-size:12px;margin-left:4px}
+.sdiv{display:flex;align-items:center;gap:8px;margin:14px 0 8px;color:var(--muted);font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px}
+.sdiv::before,.sdiv::after{content:'';flex:1;border-top:1px solid var(--border)}
+.tog{appearance:none;width:34px;height:18px;background:#ccc;border-radius:9px;cursor:pointer;position:relative;transition:.2s;flex-shrink:0}
+.tog:checked{background:var(--burg)}.tog::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:2px;left:2px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tog:checked::after{left:18px}.tog-wrap{display:flex;align-items:center;gap:7px;cursor:pointer}
+.fc-legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;padding:8px 12px;background:var(--parch);border-radius:var(--r);border:1px solid var(--border)}
+.fc-leg-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+.fc-leg-swatch{width:14px;height:14px;border-radius:3px}
+.comp-card{background:var(--parch);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-bottom:18px}
+.comp-card-hdr{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--border)}
+.comp-card-eyebrow{font-size:10px;font-weight:bold;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px}
+.comp-card-title{font-size:18px;font-weight:bold;color:var(--burg);font-family:Georgia,serif;letter-spacing:.2px}
+.comp-card-gal{font-size:12px;font-weight:normal;color:var(--muted);margin-left:8px}
+.comp-card-tanks{font-size:11px;color:var(--muted);margin-top:4px;font-family:inherit}
+.track-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.track-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:12px;box-shadow:var(--shadow)}
+.track-card-title{font-size:15px;font-weight:bold;color:var(--burg);font-family:Georgia,serif}
+.track-badge{display:inline-block;font-size:10px;border-radius:4px;padding:2px 7px;font-weight:bold}
+.tb-idle{background:#f0f0f0;color:#888}
+.tb-active{background:#e8f5e9;color:#1e8449}
+.tb-done{background:#2C3E50;color:#fff}
+.stepper{display:flex;flex-wrap:wrap;gap:0;margin:12px 0;align-items:stretch}
+.step{flex:1;min-width:110px;text-align:center;padding:9px 6px;background:#f4efe4;border:1px solid var(--border);border-left:none;font-size:11px;color:var(--muted);position:relative}
+.step:first-child{border-left:1px solid var(--border);border-radius:8px 0 0 8px}
+.step:last-child{border-radius:0 8px 8px 0}
+.step.done{background:#e6efe6;color:#3c6e47}
+.step.current{background:var(--burg,#6B2737);color:#fff;font-weight:bold}
+.step .step-date{display:block;font-size:10px;opacity:.75;margin-top:2px;font-weight:normal}
+.trk-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;background:var(--parch);border:1px solid var(--border);border-radius:var(--r);padding:10px;margin-top:8px}
+.trk-form .fg{margin:0;min-width:78px;flex:0 1 auto}
+.trk-form .fc{font-size:12px;padding:5px 6px}
+.trk-num{width:74px}
+.overdue{color:#c0392b;font-weight:bold}
+/* Staggered info cards (grapes, equipment) */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.info-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:11px 12px;box-shadow:var(--shadow);position:relative}
+.info-card.dim{opacity:.5}
+.info-card-hdr{display:flex;align-items:center;gap:7px;margin-bottom:7px;padding-bottom:7px;border-bottom:1px solid var(--parch)}
+.info-card-name{font-weight:bold;font-size:15px;color:var(--burg);font-family:Georgia,serif;flex:1;line-height:1.2}
+.info-card-acts{display:flex;gap:4px;flex-shrink:0}
+.spec-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2px 0;border-bottom:1px dotted rgba(200,184,154,.4)}
+.spec-row:last-child{border-bottom:none}
+.spec-row .k{color:var(--muted)}
+.spec-row .v{font-weight:bold;text-align:right}
+.card-inactive-tag{font-size:9px;background:#eee;border:1px solid #ccc;border-radius:3px;padding:1px 5px;color:#888;vertical-align:middle}
+.rose-section{background:var(--rose-lt);border:1px solid #e8b4c0;border-radius:var(--r);padding:8px 10px;margin-top:8px}
+.info-note{background:#eaf4fb;border:1px solid #aed6f1;border-radius:var(--r);padding:8px 10px;font-size:12px;color:#1a5276;margin-top:6px}
+.warn-note{background:#fdedec;border:1px solid #f5b7b1;border-radius:var(--r);padding:8px 10px;font-size:12px;color:#922b21;margin-top:6px}
+.ratio-total{font-size:12px;padding:3px 8px;border-radius:var(--r);font-weight:bold}
+.rt-ok{background:#d5f5e3;color:#1e8449}.rt-bad{background:#fadbd8;color:#c0392b}
+.comp-calc{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-top:8px}
+.comp-calc-row{display:flex;justify-content:space-between;font-size:12px;padding:2px 0;border-bottom:1px dashed rgba(200,184,154,.3)}
+.comp-calc-row:last-child{border-bottom:none}
+.comp-cv{font-weight:bold;color:var(--burg)}
+.split-box{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.split-item{background:#fff;border:2px solid;border-radius:var(--r);padding:6px 8px;font-size:11px}
+.split-item.blend-item{border-color:#2C7BB6}.split-item.sv-item{border-color:var(--sv)}
+.split-item-label{font-weight:bold;margin-bottom:3px}
+.split-item.blend-item .split-item-label{color:#2C7BB6}
+.split-item.sv-item .split-item-label{color:var(--sv)}
+.empty{text-align:center;padding:32px;color:var(--muted)}.empty-icon{font-size:40px;margin-bottom:8px}
+.flex{display:flex}.fai{align-items:center}.fjb{justify-content:space-between}
+.gap4{gap:4px}.gap6{gap:6px}.gap8{gap:8px}.gap12{gap:12px}
+.mt4{margin-top:4px}.mt8{margin-top:8px}.mt12{margin-top:12px}
+.mb4{margin-bottom:4px}.mb8{margin-bottom:8px}.mb12{margin-bottom:12px}
+.txt-s{font-size:12px}.txt-m{color:var(--muted)}.txt-b{font-weight:bold}
+.yeast-box{background:#f0f8f0;border:1px solid #a8d5a2;border-radius:var(--r);padding:8px 10px;margin-top:6px;font-size:12px}
+.yeast-box-mj{background:var(--mj-lt);border-color:#e0a0a8}
+.yeast-box-custom{background:#f5f0fb;border-color:#c9b0e8}
+.yeast-box-title{font-weight:bold;margin-bottom:3px;display:flex;align-items:center;gap:6px}
+.yeast-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;font-size:11px;color:var(--muted)}
+.tank-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:6px}
+.tank-card-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.tank-pct-total{font-size:11px;padding:2px 6px;border-radius:3px;font-weight:bold}
+.tpt-ok{background:#d5f5e3;color:#1e8449}.tpt-bad{background:#fadbd8;color:#c0392b}
+.harvest-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.period-month{display:flex;gap:6px}
+.period-month select{flex:1}
+/* Equipment use-category chips */
+.uses-row{display:flex;gap:4px;flex-wrap:wrap}
+.use-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:bold;cursor:pointer;border:1px solid var(--border);background:var(--parch);color:var(--muted);user-select:none;transition:.15s}
+.use-chip input[type=checkbox]{width:12px;height:12px;cursor:pointer;margin:0;accent-color:var(--burg)}
+.use-chip.chip-on{background:#d5f5e3;border-color:#7dbb8e;color:#1e6e34}
+
+/* Profile bar */
+.hdr-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:5px;font:inherit;font-size:12px;cursor:pointer;transition:.15s;white-space:nowrap}
+.hdr-btn:hover{background:rgba(255,255,255,.28)}
+.hdr-btn.hdr-btn-danger{background:rgba(220,60,60,.3);border-color:rgba(220,60,60,.5)}
+.hdr-btn.hdr-btn-danger:hover{background:rgba(220,60,60,.5)}
+.profile-select{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 8px;border-radius:5px;font:inherit;font-size:13px;cursor:pointer;max-width:160px}
+.profile-select option{background:#722F37;color:#fff}
+.menu-toggle{display:none;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;font-size:15px;font-weight:bold;line-height:1;padding:7px 12px;border-radius:var(--r);cursor:pointer;font-family:inherit}
+
+/* ═══ Responsive: tablet ═══ */
+@media (max-width:900px){
+  #content{max-width:100%;padding:12px}
+  .g3{grid-template-columns:1fr 1fr}
+  .wines-layout{grid-template-columns:190px 1fr}
+  .track-grid{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+}
+/* ═══ Responsive: phone ═══ */
+@media (max-width:640px){
+  body{font-size:13px;-webkit-text-size-adjust:100%}
+  .hdr{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .hdr-title{font-size:17px;flex:1 1 auto}
+  .menu-toggle{display:block}
+  /* menu collapsed by default on phone; hamburger reveals it */
+  .hdr #profile-bar{display:none !important}
+  .hdr .tabs{display:none}
+  .hdr.menu-open{gap:6px}
+  .hdr.menu-open #profile-bar{display:flex !important;width:100%;order:3;margin:6px 0 0 !important;flex-wrap:wrap;gap:6px}
+  .hdr.menu-open .tabs{display:flex;flex-direction:column;width:100%;order:2;gap:5px;margin-top:8px}
+  .hdr.menu-open .tab{width:100%;text-align:left;font-size:15px;padding:11px 14px}
+  #content{padding:9px}
+  .panel{padding:11px}
+  .g2,.g3{grid-template-columns:1fr}
+  .wines-layout{grid-template-columns:1fr;min-height:0}
+  .harvest-row{grid-template-columns:1fr}
+  /* wide tables scroll horizontally instead of overflowing */
+  .tbl{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+  /* bigger tap targets; 16px inputs stop iOS zoom-on-focus */
+  .btn{padding:8px 13px}
+  .fc,input.fc,select.fc,textarea.fc{font-size:16px}
+  .trk-num{width:64px}
+  /* panel/detail headers wrap instead of squishing */
+  .ph{flex-wrap:wrap;gap:8px}
+  .fc-legend{gap:8px}
+  .profile-select{max-width:44vw}
+  /* vertical stepper on narrow screens */
+  .stepper{flex-direction:column;gap:0}
+  .step{min-width:0;text-align:left;border:1px solid var(--border);border-top:none}
+  .step:first-child{border-top:1px solid var(--border);border-radius:8px 8px 0 0}
+  .step:last-child{border-radius:0 0 8px 8px}
+  .step .step-date{display:inline;margin-left:8px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="hdr">
+    <div class="hdr-title">🍷 Winemaking Planner</div>
+    <button class="menu-toggle" onclick="toggleMenu()" aria-label="Menu">☰ Menu</button>
+    <div id="profile-bar" style="display:flex;align-items:center;gap:6px;margin-left:12px;margin-right:auto"></div>
+    <nav class="tabs">
+      <button class="tab active" onclick="switchTab('setup')">⚙ Setup</button>
+      <button class="tab" onclick="switchTab('wines')">🍾 Wine Projects</button>
+      <button class="tab" onclick="switchTab('flowchart')">📊 Flowchart</button>
+      <button class="tab" onclick="switchTab('tracking')">🧪 Tracking</button>
+      <button class="tab" onclick="switchTab('supplies')">🛒 Supplies</button>
+    </nav>
+  </header>
+  <div id="content"></div>
+</div>
+<script>
+
+// ════════════════════════════════════════════
+// STORAGE & PROFILES
+// ════════════════════════════════════════════
+const STORAGE_KEY = 'wmp_v1';
+
+function loadStorage(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')||{activeProfileId:null,profiles:[]}; }
+  catch(e){ return {activeProfileId:null,profiles:[]}; }
+}
+function saveStorage(data){ try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(data)); }catch(e){} }
+
+function stateToProfile(name, id){
+  return {id:id||uid(), name, lastModified:new Date().toISOString(),
+    equipment:JSON.parse(JSON.stringify(S.equipment)),
+    customYeasts:JSON.parse(JSON.stringify(S.customYeasts||[])),
+    grapes:JSON.parse(JSON.stringify(S.grapes)),
+    wines:JSON.parse(JSON.stringify(S.wines)),
+    svEquipment:JSON.parse(JSON.stringify(S.svEquipment||{})),
+    tracking:JSON.parse(JSON.stringify(S.tracking||{}))};
+}
+function loadProfileIntoState(p){
+  if(p.equipment)   S.equipment   = p.equipment;
+  if(p.customYeasts)S.customYeasts= p.customYeasts;
+  if(p.grapes)      S.grapes      = p.grapes;
+  if(p.wines)       S.wines       = p.wines;
+  if(p.svEquipment) S.svEquipment = p.svEquipment;
+  S.tracking = p.tracking||{};
+  S.ui.trackKey = null;
+  // reset ui pointers that might point to stale ids
+  S.ui.wineId = S.wines[0]?.id||null;
+  S.ui.editingEqId=null; S.ui.editingGrapeId=null; S.ui.editingYeastId=null;
+  S.ui.showEqForm=false; S.ui.showGrapeForm=false; S.ui.showCustomYeastForm=false;
+}
+function saveToStorage(){
+  const data = loadStorage();
+  if(!data.activeProfileId && data.profiles.length===0) return; // not yet initialised
+  const idx = data.profiles.findIndex(p=>p.id===data.activeProfileId);
+  const profile = stateToProfile(idx>=0?data.profiles[idx].name:'My Cellar', data.activeProfileId||uid());
+  if(!data.activeProfileId) data.activeProfileId = profile.id;
+  if(idx>=0) data.profiles[idx]=profile; else data.profiles.push(profile);
+  saveStorage(data);
+}
+function initStorage(){
+  let data = loadStorage();
+  if(!data.profiles||data.profiles.length===0){
+    // First run — save current default state as "My Cellar"
+    const p = stateToProfile('My Cellar');
+    data = {activeProfileId:p.id, profiles:[p]};
+    saveStorage(data);
+  } else {
+    const active = data.profiles.find(p=>p.id===data.activeProfileId)||data.profiles[0];
+    data.activeProfileId = active.id;
+    saveStorage(data);
+    loadProfileIntoState(active);
+  }
+  renderProfileBar();
+  render();
+}
+function renderProfileBar(){
+  const data = loadStorage();
+  const profiles = data.profiles||[];
+  const opts = profiles.map(p=>`<option value="${p.id}" ${p.id===data.activeProfileId?'selected':''}>${p.name}</option>`).join('');
+  const bar = document.getElementById('profile-bar');
+  if(!bar) return;
+  bar.innerHTML = `
+    <span style="color:rgba(255,255,255,.7);font-size:12px;flex-shrink:0">👤</span>
+    <select class="profile-select" onchange="switchProfile(this.value)" title="Switch profile">${opts}</select>
+    <button class="hdr-btn" onclick="promptNewProfile()" title="Create a new profile">+ New</button>
+    <button class="hdr-btn" onclick="promptRenameProfile()" title="Rename current profile">✏</button>
+    <button class="hdr-btn" onclick="exportProfile()" title="Export this profile as JSON file">⬇ Export</button>
+    <label class="hdr-btn" title="Import a JSON file as a new profile" style="cursor:pointer;display:inline-flex;align-items:center">
+      ⬆ Import<input type="file" accept=".json" style="display:none" onchange="importProfile(this)">
+    </label>
+    <button class="hdr-btn hdr-btn-danger" onclick="deleteProfile('${data.activeProfileId}')" title="Delete this profile">🗑</button>`;
+}
+function switchProfile(id){
+  const data = loadStorage();
+  const p = data.profiles.find(p=>p.id===id); if(!p) return;
+  data.activeProfileId = id;
+  saveStorage(data);
+  loadProfileIntoState(p);
+  renderProfileBar();
+  render();
+}
+function promptNewProfile(){
+  const name = prompt('New profile name:', 'New Winemaker');
+  if(!name||!name.trim()) return;
+  const data = loadStorage();
+  // Start new profile with empty/default state
+  const p = {id:uid(), name:name.trim(), lastModified:new Date().toISOString(),
+    equipment:JSON.parse(JSON.stringify(S.equipment)),
+    customYeasts:[], grapes:[], wines:[]};
+  data.profiles.push(p);
+  data.activeProfileId = p.id;
+  saveStorage(data);
+  loadProfileIntoState(p);
+  renderProfileBar();
+  render();
+}
+function promptRenameProfile(){
+  const data = loadStorage();
+  const p = data.profiles.find(p=>p.id===data.activeProfileId); if(!p) return;
+  const name = prompt('Rename profile:', p.name);
+  if(!name||!name.trim()) return;
+  p.name = name.trim(); p.lastModified = new Date().toISOString();
+  saveStorage(data);
+  renderProfileBar();
+}
+function deleteProfile(id){
+  const data = loadStorage();
+  if(data.profiles.length<=1){ alert('Cannot delete the only profile.'); return; }
+  const p = data.profiles.find(p=>p.id===id);
+  if(!confirm(`Delete profile "${p?.name}"? This cannot be undone.`)) return;
+  data.profiles = data.profiles.filter(p=>p.id!==id);
+  data.activeProfileId = data.profiles[0].id;
+  saveStorage(data);
+  loadProfileIntoState(data.profiles[0]);
+  renderProfileBar();
+  render();
+}
+function exportProfile(){
+  const data = loadStorage();
+  const p = data.profiles.find(p=>p.id===data.activeProfileId)||data.profiles[0];
+  const blob = new Blob([JSON.stringify(p, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'winemaker_'+(p.name.toLowerCase().replace(/[^a-z0-9]+/g,'_'))+'_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function importProfile(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const p = JSON.parse(e.target.result);
+      if(!p.equipment&&!p.grapes&&!p.wines) throw new Error('Not a valid winemaker profile file.');
+      const name = prompt('Name for imported profile:', p.name||file.name.replace('.json',''));
+      if(!name) return;
+      p.id = uid(); p.name = name.trim(); p.lastModified = new Date().toISOString();
+      const data = loadStorage();
+      data.profiles.push(p);
+      data.activeProfileId = p.id;
+      saveStorage(data);
+      loadProfileIntoState(p);
+      renderProfileBar();
+      render();
+      alert('Profile "'+p.name+'" imported successfully!');
+    }catch(err){ alert('Import failed: '+err.message); }
+  };
+  reader.readAsText(file);
+  input.value=''; // reset so same file can be re-imported
+}
+
+// ════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════
+let S = {
+  equipment: [
+    {id:'eq1',name:'6-gal Glass Carboy',    type:'carboy',material:'glass',   volumeGal:6,   qty:2,oakType:null,uses:['secondary','aging']},
+    {id:'eq2',name:'5-gal Glass Carboy',    type:'carboy',material:'glass',   volumeGal:5,   qty:3,oakType:null,uses:['secondary','aging']},
+    {id:'eq3',name:'23L Plastic Carboy',    type:'carboy',material:'plastic', volumeGal:6.1, qty:2,oakType:null,uses:['secondary','aging']},
+    {id:'eq4',name:'30-gal Plastic Barrel', type:'barrel',material:'plastic', volumeGal:30,  qty:1,oakType:null,uses:['aging']},
+    {id:'eq5',name:'59-gal French Oak Barrel',type:'barrel',material:'oak',   volumeGal:59.4,qty:1,oakType:'french',uses:['aging']},
+    {id:'eq6',name:'20-gal HDPE Bucket',    type:'bucket',material:'plastic', volumeGal:20,  qty:4,oakType:null,uses:['primary','secondary']},
+    {id:'eq7',name:'32-gal HDPE Bucket',    type:'bucket',material:'plastic', volumeGal:32,  qty:2,oakType:null,uses:['primary','secondary']},
+  ],
+  customYeasts: [],
+  grapes: [
+    {id:'g1',name:'Cabernet Sauvignon',type:'red',  pounds:500,lbsPerGal:13,
+     origin:'Napa Valley',harvestStartPeriod:'Early',harvestStartMonth:'September',harvestEndPeriod:'Mid',harvestEndMonth:'October',targetBrix:25},
+    {id:'g2',name:'Merlot',            type:'red',  pounds:175,lbsPerGal:13,
+     origin:'Sonoma',harvestStartPeriod:'Early',harvestStartMonth:'September',harvestEndPeriod:'Early',harvestEndMonth:'October',targetBrix:24},
+    {id:'g3',name:'Chardonnay',        type:'white',pounds:150,lbsPerGal:12,
+     origin:'Russian River Valley',harvestStartPeriod:'Late',harvestStartMonth:'August',harvestEndPeriod:'Mid',harvestEndMonth:'September',targetBrix:23},
+  ],
+  wines: [
+    {
+      id:'w1',name:'Bordeaux Blend',color:'red',wineType:'blend',lbsPerGal:13,
+      agingEquipmentId:'eq4',agingVolumeGal:30,useOak:false,oakType:null,
+      components:[
+        {grapeId:'g1',ratio:70,primaryEquipmentId:'eq7',secondaryEquipmentId:'eq7',
+         hasRose:true,saigneePercent:10,roseAgingEquipmentId:'eq3',roseAgingVolumeGal:6.1,
+         roseYeastId:'71b',singleAgingEquipmentId:'eq1',
+         yeastId:'mj-vr21',useTankSplit:false,
+         tanks:[{id:'tk1',name:'Tank A',percent:100,yeastId:'mj-vr21',blendPct:100}]},
+        {grapeId:'g2',ratio:30,primaryEquipmentId:'eq6',secondaryEquipmentId:'eq6',
+         hasRose:false,saigneePercent:10,roseAgingEquipmentId:null,roseAgingVolumeGal:0,
+         roseYeastId:null,singleAgingEquipmentId:'eq2',
+         yeastId:'mj-vr5',useTankSplit:false,
+         tanks:[{id:'tk2',name:'Tank A',percent:100,yeastId:'mj-vr5',blendPct:100}]},
+      ],
+      grapeId:null,secondaryEquipmentId:null,primaryEquipmentId:null,
+      hasRose:false,saigneePercent:0,roseAgingEquipmentId:null,roseAgingVolumeGal:0,
+      roseYeastId:null,yeastId:null,useTankSplit:false,tanks:[],
+    },
+    {
+      id:'w2',name:'Chardonnay Reserve',color:'white',wineType:'single',lbsPerGal:12,
+      components:[],grapeId:'g3',
+      agingEquipmentId:'eq3',agingVolumeGal:6.1,useOak:false,oakType:null,
+      secondaryEquipmentId:'eq2',primaryEquipmentId:'eq6',
+      hasRose:false,saigneePercent:0,roseAgingEquipmentId:null,roseAgingVolumeGal:0,
+      roseYeastId:null,yeastId:'mj-m02',useTankSplit:false,
+      tanks:[{id:'tk3',name:'Tank A',percent:100,yeastId:'mj-m02',blendPct:100}],
+    },
+  ],
+  svEquipment:{},
+  tracking:{},
+  ui:{tab:'setup',wineId:'w1',showEqForm:false,showGrapeForm:false,
+      showCustomYeastForm:false,editingEqId:null,editingGrapeId:null,editingYeastId:null,trackKey:null}
+};
+
+// ════════════════════════════════════════════
+// YEASTS DATABASE
+// ════════════════════════════════════════════
+const YEASTS = [
+  {id:'mj-vr21',brand:'Mangrove Jack',name:'VR21',fullName:'MJ VR21 Red Varietal',
+   desc:'Rich extraction, enhances fruit and tannin structure. Full-bodied reds with excellent colour.',
+   alc:16,temp:'15–35°C',tags:['red'],recFor:['Cabernet Sauvignon','Merlot','Shiraz','Tempranillo','Malbec']},
+  {id:'mj-vr5',brand:'Mangrove Jack',name:'VR5',fullName:'MJ VR5 Red Varietal',
+   desc:'Good colour extraction and tannin structure. Suits medium-to-full-bodied reds.',
+   alc:15,temp:'15–30°C',tags:['red'],recFor:['Merlot','Cabernet Franc','Sangiovese','Grenache','Pinot Noir']},
+  {id:'mj-vrs',brand:'Mangrove Jack',name:'VRS',fullName:'MJ VRS Shiraz Specialist',
+   desc:'Purpose-built for Shiraz. Enhances dark fruit, pepper, and spice characteristics.',
+   alc:15,temp:'15–35°C',tags:['red'],recFor:['Shiraz','Petite Sirah','Grenache']},
+  {id:'mj-vr3',brand:'Mangrove Jack',name:'VR3',fullName:'MJ VR3 Aromatic White',
+   desc:'Produces floral, aromatic whites with great fruit expression. Ideal for cool fermentation.',
+   alc:14,temp:'10–25°C',tags:['white'],recFor:['Riesling','Gewürztraminer','Pinot Gris','Viognier','Muscat']},
+  {id:'mj-m02',brand:'Mangrove Jack',name:'M02',fullName:'MJ M02 Crisp White',
+   desc:'Clean, crisp fermentation. Good acidity retention. Suited to Sauvignon Blanc and unoaked whites.',
+   alc:14,temp:'12–25°C',tags:['white'],recFor:['Sauvignon Blanc','Pinot Grigio','Chardonnay']},
+  {id:'mj-vr6',brand:'Mangrove Jack',name:'VR6',fullName:'MJ VR6 Sparkling Wine',
+   desc:'Fast, reliable fermenter. Versatile — suits sparkling, still, and rosé wines.',
+   alc:18,temp:'15–30°C',tags:['white','rose','red'],recFor:[]},
+  {id:'ec1118',brand:'Lalvin',name:'EC-1118',fullName:'Lalvin EC-1118 (Champagne)',
+   desc:'Neutral workhorse with extremely high alcohol tolerance. Good for stuck fermentations. Excellent for rosé.',
+   alc:18,temp:'10–30°C',tags:['white','rose','red'],recFor:[]},
+  {id:'71b',brand:'Lalvin',name:'71B',fullName:'Lalvin 71B (Narbonne)',
+   desc:'Fruity and round. Reduces malic acid. Excellent for rosé, nouveau reds, and soft whites.',
+   alc:14,temp:'15–30°C',tags:['red','rose','white'],recFor:['Merlot','Zinfandel','Chardonnay','Malbec']},
+  {id:'d47',brand:'Lalvin',name:'D47',fullName:'Lalvin D47 (Côte du Rhône)',
+   desc:'Enhances mouthfeel and tropical notes. Must ferment cool (below 18°C) to avoid off-flavours.',
+   alc:14,temp:'10–18°C',tags:['white'],recFor:['Chardonnay','Viognier','Roussanne']},
+  {id:'rc212',brand:'Lalvin',name:'RC-212',fullName:'Lalvin RC-212 (Bourgovin)',
+   desc:'Classic Burgundy strain. Elegant structure, allows terroir expression.',
+   alc:16,temp:'15–30°C',tags:['red'],recFor:['Pinot Noir','Gamay','Grenache','Dolcetto']},
+  {id:'k1v1116',brand:'Lalvin',name:'K1-V1116',fullName:'Lalvin K1-V1116 (Montpellier)',
+   desc:'Strong fermenter, enhances varietal aromatics. Also great for rosé and light reds.',
+   alc:18,temp:'10–35°C',tags:['white','rose'],recFor:['Sauvignon Blanc','Pinot Grigio','Gewürztraminer']},
+  {id:'bm4x4',brand:'Lalvin',name:'BM4×4',fullName:'Lalvin BM4×4',
+   desc:'Complex tannin structure for full-bodied reds. Needs nutrition support.',
+   alc:15,temp:'15–30°C',tags:['red'],recFor:['Cabernet Sauvignon','Merlot','Sangiovese']},
+  {id:'rs-pb',brand:'Red Star',name:'Premier Blanc',fullName:'Red Star Premier Blanc',
+   desc:'Clean, neutral, reliable. High alcohol tolerance. Versatile for whites, reds, and rosé.',
+   alc:18,temp:'10–35°C',tags:['white','red','rose'],recFor:[]},
+
+  {id:'icvd254',brand:'Lalvin',name:'ICV-D254',fullName:'Lalvin ICV-D254',
+   desc:'Excellent for full-bodied whites and rosé. Enhances mouthfeel, roundness, and vanilla/butter notes. Oak-compatible. Also suited to barrel-fermented reds.',
+   alc:14,temp:'15–30°C',tags:['white','rose'],recFor:['Chardonnay','Viognier','Roussanne','Marsanne','Pinot Gris']},
+  {id:'icvbdx',brand:'Lalvin',name:'ICV-BDX',fullName:'Lalvin ICV-BDX',
+   desc:'Classic Bordeaux strain. Good colour and tannin extraction, fruit-forward with structure. Ideal for full-bodied red blends.',
+   alc:14,temp:'18–30°C',tags:['red'],recFor:['Cabernet Sauvignon','Merlot','Malbec','Cabernet Franc','Petit Verdot']},
+  {id:'d80',brand:'Anchor',name:'D80',fullName:'Anchor D80',
+   desc:'South African strain prized for smooth, rich reds. Full extraction with good mouthfeel. Widely used in Shiraz, Pinotage, and Bordeaux-style blends.',
+   alc:15,temp:'15–30°C',tags:['red'],recFor:['Shiraz','Pinotage','Cabernet Sauvignon','Merlot']},
+  {id:'mj-r56',brand:'Mangrove Jack',name:'R56',fullName:'MJ R56 Superior Red',
+   desc:'Selected for structured, full-bodied reds. Excellent colour stability and tannin integration. Suits longer maceration styles.',
+   alc:16,temp:'15–35°C',tags:['red'],recFor:['Cabernet Sauvignon','Shiraz','Grenache','Merlot','Tempranillo']},
+  {id:'mj-m06',brand:'Mangrove Jack',name:'M06',fullName:'MJ M06 Merlot',
+   desc:'Purpose-designed for Merlot and soft red varieties. Smooth, plummy profile with good colour. Lower tannin extraction for early-drinking styles.',
+   alc:14,temp:'15–30°C',tags:['red'],recFor:['Merlot','Pinot Noir','Grenache','Dolcetto','Gamay']},
+  {id:'mj-cr51',brand:'Mangrove Jack',name:'CR51',fullName:'MJ CR51 Chardonnay Reserve',
+   desc:'Specialist Chardonnay strain. Enhances tropical fruit and creamy texture. Works well with or without oak. Low foaming, suitable for barrel fermentation.',
+   alc:14,temp:'12–25°C',tags:['white'],recFor:['Chardonnay','Viognier','Pinot Gris','Roussanne']},
+];
+
+// ════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════
+const uid = () => 'id'+Math.random().toString(36).slice(2,9);
+const byId = id => S.equipment.find(e=>e.id===id);
+const grapeById = id => S.grapes.find(g=>g.id===id);
+const wineById = id => S.wines.find(w=>w.id===id);
+const yeastById = id => YEASTS.find(y=>y.id===id) || (S.customYeasts||[]).find(y=>y.id===id);
+const fmtGal = n => n==null?'—':(+n).toFixed(2)+' gal';
+const fmtLbs = n => n==null?'—':Math.round(n)+' lbs';
+const BPGAL = 5.0472;
+const LOSS = {pToS:0.85, sToA:0.95, aToB:0.95};
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const PERIODS = ['Early','Mid','Late'];
+const USE_LABELS = {primary:'Primary',secondary:'Secondary',aging:'Aging'};
+
+// Filter equipment by use category; if equipment has no uses set, include it everywhere
+function eqOpts(selectedId, placeholder='— Custom —', useFilter=null){
+  const list = useFilter
+    ? S.equipment.filter(e=>!e.uses||e.uses.length===0||e.uses.includes(useFilter))
+    : S.equipment;
+  return `<option value="">${placeholder}</option>`+
+    list.map(e=>`<option value="${e.id}" ${e.id===selectedId?'selected':''}>
+      ${e.name} — ${e.volumeGal}gal (qty:${e.qty})</option>`).join('');
+}
+
+function yeastOpts(selectedId, grapeName=''){
+  const custom = (S.customYeasts||[]);
+  const mj = YEASTS.filter(y=>y.brand==='Mangrove Jack');
+  const lalvin = YEASTS.filter(y=>y.brand==='Lalvin');
+  const rs = YEASTS.filter(y=>y.brand==='Red Star');
+  const opt = y => {
+    const rec = grapeName && y.recFor && y.recFor.includes(grapeName);
+    return `<option value="${y.id}" ${y.id===selectedId?'selected':''}>${rec?'⭐ ':''}${y.fullName||y.name}</option>`;
+  };
+  const customGroup = custom.length
+    ? `<optgroup label="✏ Custom">${custom.map(opt).join('')}</optgroup>` : '';
+  return `<option value="">— No yeast specified —</option>
+    <optgroup label="🍇 Mangrove Jack">${mj.map(opt).join('')}</optgroup>
+    <optgroup label="🧪 Lalvin">${lalvin.map(opt).join('')}</optgroup>
+    <optgroup label="🧫 Red Star">${rs.map(opt).join('')}</optgroup>
+    ${customGroup}`;
+}
+
+function renderYeastInfo(yeastId){
+  const y = yeastById(yeastId); if(!y) return '';
+  const isMJ = y.brand==='Mangrove Jack';
+  const isCustom = (S.customYeasts||[]).some(c=>c.id===yeastId);
+  const boxClass = isCustom ? 'yeast-box yeast-box-custom' : (isMJ ? 'yeast-box yeast-box-mj' : 'yeast-box');
+  const brandTag = isCustom
+    ? `<span style="background:#9b59b6;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px">Custom</span>`
+    : isMJ ? `<span class="badge-mj">Mangrove Jack</span>`
+    : `<span style="color:var(--muted);font-size:11px">${y.brand}</span>`;
+  return `<div class="${boxClass}">
+    <div class="yeast-box-title">${brandTag}<span style="font-size:13px">${y.fullName||y.name}</span></div>
+    ${y.desc?`<div style="color:var(--muted);font-size:12px;margin:3px 0">${y.desc}</div>`:''}
+    <div class="yeast-meta">
+      ${y.alc?`<span>🍷 Max alc: <b>${y.alc}%</b></span>`:''}
+      ${y.temp?`<span>🌡 Temp: <b>${y.temp}</b></span>`:''}
+      ${y.tags&&y.tags.length?`<span>Styles: <b>${y.tags.join(', ')}</b></span>`:''}
+      ${y.recFor&&y.recFor.length?`<span>Suits: <b>${y.recFor.slice(0,3).join(', ')}${y.recFor.length>3?'…':''}</b></span>`:''}
+    </div>
+  </div>`;
+}
+
+// Use-category chips (inline in table row, no form submit needed)
+function useChips(eqId, uses){
+  return ['primary','secondary','aging'].map(u=>{
+    const on = uses&&uses.includes(u);
+    return `<label class="use-chip${on?' chip-on':''}" title="${USE_LABELS[u]}">
+      <input type="checkbox" style="display:none" ${on?'checked':''}
+        onchange="toggleEqUse('${eqId}','${u}',this.checked)">
+      ${u==='primary'?'P':u==='secondary'?'S':'A'}
+    </label>`;
+  }).join('');
+}
+// Use-category checkboxes for forms
+function useCheckboxes(prefix, uses){
+  return ['primary','secondary','aging'].map(u=>
+    `<label class="tog-wrap" style="margin-right:12px">
+      <input type="checkbox" id="${prefix}-use-${u}" ${uses&&uses.includes(u)?'checked':''}>
+      <span class="lbl" style="margin:0;text-transform:capitalize">${USE_LABELS[u]}</span>
+    </label>`).join('');
+}
+function getUsesFromForm(prefix){
+  return ['primary','secondary','aging'].filter(u=>document.getElementById(`${prefix}-use-${u}`)?.checked);
+}
+// ════════════════════════════════════════════
+// GRAPE ALLOCATION ENGINE
+// ════════════════════════════════════════════
+// Returns a Map<grapeId, {totalLbs, allocations:[{wineId,wineName,lbs}], remainingLbs}>
+// Each wine's demand is calculated forward from its grape poundage settings.
+// For single wines: grapes needed = backward calc from aging vessel.
+// For blend wines: grapes used = totalMustGal * lbpg (forward from all grapes available).
+// We assign demand in wine order (index), deducting from the pool as we go.
+function calcGrapeAllocations(){
+  // Priority model:
+  //  PASS 1 — blends claim only the lbs their blend portion actually needs
+  //           (so the same grape can feed several blends without conflict)
+  //  PASS 2 — dedicated single-varietal wines take from what's left
+  //  PASS 3 — remaining lbs flow to the first blend component using that
+  //           grape and become single-variety excess (united by yeast)
+  const allocMap = new Map(); // grapeId -> {totalLbs, allocations:[{wineId,wineName,requested,allocated}]}
+  S.grapes.forEach(g => allocMap.set(g.id, {totalLbs: g.pounds, allocations: []}));
+  const remainingOf = id => {
+    const e = allocMap.get(id); if(!e) return 0;
+    return Math.max(0, e.totalLbs - e.allocations.reduce((s,a)=>s+a.allocated,0));
+  };
+  const push = (grapeId, wineId, wineName, lbs) => {
+    const e = allocMap.get(grapeId); if(!e) return;
+    const inactive = grapeById(grapeId)?.active===false;
+    const allocated = inactive ? 0 : Math.min(lbs, remainingOf(grapeId));
+    e.allocations.push({wineId, wineName, requested: lbs, allocated});
+  };
+  const activeWines = S.wines.filter(w=>w.active!==false);
+
+  // PASS 1 — blends (need-based, back-calculated from the aging vessel)
+  activeWines.filter(w=>w.wineType==='blend').forEach(wine => {
+    const agingGal = parseFloat(wine.agingVolumeGal)||0; if(!agingGal) return;
+    const blendSecNeeded = agingGal/LOSS.sToA;
+    const totRatio = wine.components.reduce((s,c)=>s+(parseFloat(c.ratio)||0),0)||1;
+    wine.components.forEach(comp => {
+      if(!comp.grapeId) return;
+      const grape = grapeById(comp.grapeId);
+      const lbpg = grape?.lbsPerGal || parseFloat(wine.lbsPerGal)||13;
+      const ratio = (parseFloat(comp.ratio)||0)/totRatio;
+      const needSec = blendSecNeeded*ratio;
+      const sf = (comp.hasRose && comp.saigneePercent>0 && wine.color==='red') ? comp.saigneePercent/100 : 0;
+      // fraction of this component's secondary that its tanks route to the blend
+      const effFrac = (comp.useTankSplit && comp.tanks?.length>0)
+        ? comp.tanks.reduce((s,t)=>s+((parseFloat(t.percent)||0)/100)*((t.blendPct==null?100:parseFloat(t.blendPct)||0)/100),0)
+        : 1;
+      const denom = LOSS.pToS*(1-sf)*effFrac;
+      const needMust = denom>0 ? needSec/denom : 0;
+      push(comp.grapeId, wine.id, wine.name, needMust*lbpg);
+    });
+  });
+
+  // PASS 2 — dedicated single-varietal wines
+  activeWines.filter(w=>w.wineType==='single').forEach(wine => {
+    const agingGal = parseFloat(wine.agingVolumeGal)||0;
+    if(!agingGal || !wine.grapeId) return;
+    const grape = grapeById(wine.grapeId);
+    const lbpg = grape?.lbsPerGal || parseFloat(wine.lbsPerGal)||13;
+    const secGal = agingGal/LOSS.sToA, primaryGal = secGal/LOSS.pToS;
+    let totalMust = primaryGal;
+    if(wine.hasRose && wine.saigneePercent>0 && wine.color==='red'){
+      totalMust = primaryGal/(1 - wine.saigneePercent/100);
+    }
+    push(wine.grapeId, wine.id, wine.name, totalMust*lbpg);
+  });
+
+  // PASS 3 — leftovers become single-variety excess via the first blend user
+  allocMap.forEach((entry, grapeId) => {
+    if(grapeById(grapeId)?.active===false) return;
+    const rem = remainingOf(grapeId);
+    if(rem<=0.01) return;
+    const firstBlendAlloc = entry.allocations.find(a=>{
+      const w = wineById(a.wineId); return w && w.wineType==='blend';
+    });
+    if(firstBlendAlloc){ firstBlendAlloc.requested+=rem; firstBlendAlloc.allocated+=rem; }
+  });
+
+  allocMap.forEach(entry => {
+    let used = entry.allocations.reduce((s,a)=>s+a.allocated,0);
+    if(Math.abs(used-entry.totalLbs)<0.005) used = entry.totalLbs; // snap float noise
+    entry.remainingLbs = Math.max(0, entry.totalLbs - used);
+    entry.usedLbs = used;
+  });
+
+  return allocMap;
+}
+
+// Get lbs available to a specific wine for a specific grape,
+// respecting prior wines' allocations (wines earlier in the list get priority).
+function grapeAvailableToWine(grapeId, wineId){
+  const allocMap = calcGrapeAllocations();
+  const entry = allocMap.get(grapeId); if(!entry) return 0;
+  const myAlloc = entry.allocations.find(a=>a.wineId===wineId);
+  return myAlloc ? myAlloc.allocated : 0;
+}
+
+// ════════════════════════════════════════════
+// CALCULATION ENGINE
+// ════════════════════════════════════════════
+function calcRoseChain(mustGal, roseAgingVolumeGal){
+  const secGal = mustGal * LOSS.pToS;
+  const ageGal = roseAgingVolumeGal ? parseFloat(roseAgingVolumeGal) : secGal * LOSS.sToA;
+  const botGal = ageGal * LOSS.aToB;
+  return {primaryGal:mustGal,secondaryGal:secGal,agingGal:ageGal,bottleGal:botGal,bottles:Math.floor(botGal*BPGAL)};
+}
+function calcSingleWine(wine){
+  const agingGal = parseFloat(wine.agingVolumeGal)||0; if(!agingGal) return null;
+  const grape = grapeById(wine.grapeId);
+  const lbpg = grape?.lbsPerGal||parseFloat(wine.lbsPerGal)||13;
+  const bottleGal = agingGal*LOSS.aToB, bottles=Math.floor(bottleGal*BPGAL);
+  const secondaryGal = agingGal/LOSS.sToA, primaryGal=secondaryGal/LOSS.pToS;
+  let totalMustGal=primaryGal,roseMustGal=0,roseCalc=null;
+  if(wine.hasRose&&wine.saigneePercent>0&&wine.color==='red'){
+    const sf=wine.saigneePercent/100; totalMustGal=primaryGal/(1-sf); roseMustGal=totalMustGal*sf;
+    roseCalc=calcRoseChain(roseMustGal,wine.roseAgingVolumeGal);
+  }
+  const grapsNeeded=totalMustGal*lbpg;
+  const totalLbs=grape?.pounds||0;
+  const availLbs=wine.grapeId?grapeAvailableToWine(wine.grapeId,wine.id):0;
+  const tankResults=wine.useTankSplit&&wine.tanks?.length>0
+    ?wine.tanks.map(t=>({...t,mustGal:t.percent/100*totalMustGal,secGal:t.percent/100*totalMustGal*LOSS.pToS})):null;
+  return {isSingle:true,totalMustGal,primaryGal,roseMustGal,secondaryGal,agingGal,bottleGal,bottles,
+    grapsNeeded,availLbs,totalLbs,sufficient:availLbs>=grapsNeeded,tankResults,
+    components:[{grapeId:wine.grapeId,name:grape?.name||'?',ratio:100,totalMustGal,primaryGal,roseMustGal,
+      compSecGal:secondaryGal,blendPortionGal:0,excessGal:0,shortfall:0,availLbs,totalLbs,sufficient:availLbs>=grapsNeeded,roseCalc,singleCalc:null}]};
+}
+function calcBlendWine(wine){
+  const agingGal=parseFloat(wine.agingVolumeGal)||0; if(!agingGal) return null;
+  const blendSecNeeded=agingGal/LOSS.sToA, blendBotGal=agingGal*LOSS.aToB, blendBottles=Math.floor(blendBotGal*BPGAL);
+  const totRatio=wine.components.reduce((s,c)=>s+(parseFloat(c.ratio)||0),0)||1;
+  const allocMap=calcGrapeAllocations();
+  const components=wine.components.map(comp=>{
+    const ratio=(parseFloat(comp.ratio)||0)/totRatio;
+    const grape=grapeById(comp.grapeId);
+    const lbpg=grape?.lbsPerGal||parseFloat(wine.lbsPerGal)||13;
+    const totalLbs=grape?.pounds||0;
+    // Use only the lbs allocated to this wine for this grape
+    const allocEntry=comp.grapeId?allocMap.get(comp.grapeId):null;
+    const myAlloc=allocEntry?.allocations.find(a=>a.wineId===wine.id);
+    const availLbs=myAlloc?myAlloc.allocated:0;
+    const totalMustGal=availLbs/lbpg;
+    let redMustGal=totalMustGal,roseMustGal=0,roseCalc=null;
+    if(comp.hasRose&&comp.saigneePercent>0&&wine.color==='red'){
+      const sf=comp.saigneePercent/100; roseMustGal=totalMustGal*sf; redMustGal=totalMustGal*(1-sf);
+      roseCalc=calcRoseChain(roseMustGal,comp.roseAgingVolumeGal);
+    }
+    const compSecGal=redMustGal*LOSS.pToS, blendPortionGal=blendSecNeeded*ratio;
+    let blendFromComp,svFromComp,tankResults=null;
+    if(comp.useTankSplit&&comp.tanks?.length>0){
+      // Cap what the tanks send to the blend at the blend portion; the rest
+      // stays in the tanks as single-variety excess (united by yeast later).
+      const rawBlend=comp.tanks.reduce((s,t)=>s+(t.percent/100*redMustGal*LOSS.pToS*((t.blendPct==null?100:t.blendPct)/100)),0);
+      blendFromComp=Math.min(rawBlend,blendPortionGal);
+      svFromComp=Math.max(0,compSecGal-blendFromComp);
+      const scale=rawBlend>0?blendFromComp/rawBlend:0;
+      tankResults=comp.tanks.map(t=>{
+        const secShare=t.percent/100*redMustGal*LOSS.pToS;
+        const bg=secShare*((t.blendPct==null?100:t.blendPct)/100)*scale;
+        return {...t,mustGal:t.percent/100*totalMustGal,secGal:secShare,blendGal:bg,svGal:Math.max(0,secShare-bg)};
+      });
+    } else { blendFromComp=Math.min(compSecGal,blendPortionGal); svFromComp=Math.max(0,compSecGal-blendPortionGal); }
+    const excessGal=svFromComp, shortfall=Math.max(0,blendPortionGal-blendFromComp);
+    let singleCalc=null;
+    if(excessGal>0.05){
+      const svEq=byId(comp.singleAgingEquipmentId);
+      const svAgeGal=svEq?svEq.volumeGal:excessGal*LOSS.sToA, svBotGal=svAgeGal*LOSS.aToB;
+      singleCalc={secondaryGal:excessGal,agingGal:svAgeGal,bottleGal:svBotGal,bottles:Math.floor(svBotGal*BPGAL)};
+    }
+    return {grapeId:comp.grapeId,name:grape?.name||'?',ratio:ratio*100,availLbs,totalLbs,totalMustGal,redMustGal,roseMustGal,
+      compSecGal,blendPortionGal,blendFromComp,excessGal,svFromComp,shortfall,sufficient:shortfall===0,
+      roseCalc,singleCalc,tankResults,useTankSplit:comp.useTankSplit};
+  });
+  return {isBlend:true,components,blendSecNeeded,agingGal,blendBotGal,blendBottles,
+    secondaryGal:blendSecNeeded,bottleGal:blendBotGal,bottles:blendBottles,
+    totalGrapesPounds:components.reduce((s,c)=>s+c.availLbs,0),
+    totalMustGal:components.reduce((s,c)=>s+c.totalMustGal,0)};
+}
+function calcWine(w){ return w.wineType==='blend'?calcBlendWine(w):calcSingleWine(w); }
+
+function calcSVConsolidation(){
+  // Aggregate SV excess across all blend wines, grouped by grapeId::yeastId
+  const pools=new Map();
+  S.wines.forEach(wine=>{
+    if(wine.wineType!=='blend'||wine.active===false) return;
+    const calc=calcWine(wine);
+    wine.components.forEach((comp,ci)=>{
+      const cc=calc?.components[ci]; if(!cc||cc.excessGal<=0.05) return;
+      if(comp.useTankSplit&&comp.tanks?.length>0){
+        comp.tanks.forEach((t,ti)=>{
+          const svGal=cc.tankResults?.[ti]?.svGal||0; if(svGal<=0.05) return;
+          const key=comp.grapeId+'::'+(t.yeastId||'none');
+          if(!pools.has(key)) pools.set(key,{grapeId:comp.grapeId,yeastId:t.yeastId||null,totalExcessGal:0,sources:[]});
+          const p=pools.get(key); p.totalExcessGal+=svGal;
+          p.sources.push({wineId:wine.id,wineName:wine.name,compIdx:ci,tankIdx:ti});
+        });
+      } else {
+        const key=comp.grapeId+'::'+(comp.yeastId||'none');
+        if(!pools.has(key)) pools.set(key,{grapeId:comp.grapeId,yeastId:comp.yeastId||null,totalExcessGal:0,sources:[]});
+        const p=pools.get(key); p.totalExcessGal+=cc.excessGal;
+        p.sources.push({wineId:wine.id,wineName:wine.name,compIdx:ci,tankIdx:null});
+      }
+    });
+  });
+  pools.forEach((p,key)=>{
+    p.isShared=new Set(p.sources.map(s=>s.wineId)).size>1;
+    const eqId=(S.svEquipment||{})[key],eq=byId(eqId);
+    p.eqId=eqId||null;
+    p.agingGal=eq?eq.volumeGal:+(p.totalExcessGal*LOSS.sToA).toFixed(2);
+    p.bottles=Math.floor(p.agingGal*LOSS.aToB*BPGAL);
+  });
+  return pools;
+}
+
+// ════════════════════════════════════════════
+// ROUTING
+// ════════════════════════════════════════════
+function switchTab(t){
+  S.ui.tab=t;
+  document.querySelector('.hdr')?.classList.remove('menu-open'); // close mobile menu on nav
+  document.querySelectorAll('.tab').forEach(b=>{
+    b.classList.toggle('active',
+      (t==='setup'&&b.textContent.includes('Setup'))||
+      (t==='wines'&&b.textContent.includes('Wine'))||
+      (t==='flowchart'&&b.textContent.includes('Flow'))||
+      (t==='tracking'&&b.textContent.includes('Track'))||
+      (t==='supplies'&&b.textContent.includes('Supplies')));
+  });
+  render();
+}
+function toggleMenu(){ document.querySelector('.hdr')?.classList.toggle('menu-open'); }
+function render(){ document.getElementById('content').innerHTML=renderTab(); saveToStorage(); renderProfileBar(); }
+function renderTab(){
+  if(S.ui.tab==='setup')  return renderSetup();
+  if(S.ui.tab==='wines')  return renderWines();
+  if(S.ui.tab==='tracking') return renderTrackingTab();
+  if(S.ui.tab==='supplies') return renderSuppliesTab();
+  return renderFlowchartTab();
+}
+
+// ════════════════════════════════════════════
+// SETUP TAB
+// ════════════════════════════════════════════
+function renderSetup(){
+  return `<div class="g2">${renderGrapePanel()}${renderEquipPanel()}</div>${renderCustomYeastsPanel()}`;
+}
+
+function renderEquipPanel(){
+  const editEq = S.ui.editingEqId ? byId(S.ui.editingEqId) : null;
+  const useCbEdit = editEq ? `
+    <div class="fg"><label class="lbl">Use Categories</label>
+      <div class="flex gap12">${useCheckboxes('eq-edit',editEq.uses||[])}</div></div>` : '';
+  const editForm = editEq ? `
+    <div class="ifrm"><div class="ifrm-t">✏ Edit — ${editEq.name}</div>
+      <div class="g3">
+        <div class="fg"><label class="lbl">Name</label><input class="fc" id="eq-edit-n" value="${editEq.name}"></div>
+        <div class="fg"><label class="lbl">Type</label>
+          <select class="fc" id="eq-edit-t" onchange="toggleOakFieldEdit()">
+            <option value="carboy" ${editEq.type==='carboy'?'selected':''}>Carboy</option>
+            <option value="barrel" ${editEq.type==='barrel'?'selected':''}>Barrel</option>
+            <option value="bucket" ${editEq.type==='bucket'?'selected':''}>Bucket/Tank</option></select></div>
+        <div class="fg"><label class="lbl">Material</label>
+          <select class="fc" id="eq-edit-m" onchange="toggleOakFieldEdit()">
+            <option value="glass" ${editEq.material==='glass'?'selected':''}>Glass</option>
+            <option value="plastic" ${editEq.material==='plastic'?'selected':''}>Plastic</option>
+            <option value="stainless" ${editEq.material==='stainless'?'selected':''}>Stainless</option>
+            <option value="oak" ${editEq.material==='oak'?'selected':''}>Oak</option></select></div>
+        <div class="fg"><label class="lbl">Volume (gal)</label>
+          <input class="fc" type="number" id="eq-edit-v" step="0.1" min="0.5" value="${editEq.volumeGal}"></div>
+        <div class="fg"><label class="lbl">Quantity</label>
+          <input class="fc" type="number" id="eq-edit-q" min="1" value="${editEq.qty}"></div>
+        <div class="fg" id="oak-field-edit" style="${editEq.material==='oak'?'':'display:none'}">
+          <label class="lbl">Oak Type</label>
+          <select class="fc" id="eq-edit-ot">
+            <option value="french" ${editEq.oakType==='french'?'selected':''}>French</option>
+            <option value="american" ${editEq.oakType==='american'?'selected':''}>American</option>
+            <option value="hungarian" ${editEq.oakType==='hungarian'?'selected':''}>Hungarian</option></select></div>
+        <div class="fg"><label class="lbl">Reuses / turnovers per season</label>
+          <input class="fc" type="number" id="eq-edit-r" min="0" max="20" value="${editEq.reuses||0}" title="How many extra times each unit can be reused (staggered crushes)"></div>
+        <div class="fg" id="cond-field-edit" style="${(editEq.type==='barrel'||editEq.material==='oak')?'':'display:none'}">
+          <label class="lbl">Barrel condition</label>
+          <select class="fc" id="eq-edit-cond">
+            <option value="new" ${(editEq.condition||'new')==='new'?'selected':''}>New</option>
+            <option value="used" ${editEq.condition==='used'?'selected':''}>Used</option></select></div>
+        <div class="fg" id="times-field-edit" style="${(editEq.type==='barrel'||editEq.material==='oak')&&editEq.condition==='used'?'':'display:none'}">
+          <label class="lbl">Times used before</label>
+          <input class="fc" type="number" id="eq-edit-tu" min="0" max="30" value="${editEq.timesUsed||0}"></div>
+      </div>
+      ${useCbEdit}
+      <div class="flex gap8 mt8">
+        <button class="btn btn-p btn-sm" onclick="saveEqEdit('${editEq.id}')">Save Changes</button>
+        <button class="btn btn-s btn-sm" onclick="S.ui.editingEqId=null;render()">Cancel</button>
+      </div></div>` : '';
+
+  const addForm = S.ui.showEqForm ? `
+    <div class="ifrm"><div class="ifrm-t">Add Equipment</div>
+      <div class="g3">
+        <div class="fg"><label class="lbl">Name</label><input class="fc" id="eq-n" placeholder="e.g. 6-gal Carboy"></div>
+        <div class="fg"><label class="lbl">Type</label>
+          <select class="fc" id="eq-t" onchange="toggleOakField()"><option value="carboy">Carboy</option><option value="barrel">Barrel</option>
+            <option value="bucket">Bucket/Tank</option></select></div>
+        <div class="fg"><label class="lbl">Material</label>
+          <select class="fc" id="eq-m" onchange="toggleOakField()">
+            <option value="glass">Glass</option><option value="plastic">Plastic</option>
+            <option value="stainless">Stainless</option><option value="oak">Oak</option></select></div>
+        <div class="fg"><label class="lbl">Volume (gal)</label>
+          <input class="fc" type="number" id="eq-v" step="0.1" min="0.5"></div>
+        <div class="fg"><label class="lbl">Quantity</label>
+          <input class="fc" type="number" id="eq-q" value="1" min="1"></div>
+        <div class="fg" id="oak-field" style="display:none"><label class="lbl">Oak Type</label>
+          <select class="fc" id="eq-ot">
+            <option value="french">French</option><option value="american">American</option>
+            <option value="hungarian">Hungarian</option></select></div>
+        <div class="fg"><label class="lbl">Reuses / turnovers per season</label>
+          <input class="fc" type="number" id="eq-r" min="0" max="20" value="0" title="Extra times each unit can be reused across staggered crushes"></div>
+        <div class="fg" id="cond-field" style="display:none"><label class="lbl">Barrel condition</label>
+          <select class="fc" id="eq-cond" onchange="toggleTimesField()">
+            <option value="new">New</option><option value="used">Used</option></select></div>
+        <div class="fg" id="times-field" style="display:none"><label class="lbl">Times used before</label>
+          <input class="fc" type="number" id="eq-tu" min="0" max="30" value="0"></div>
+      </div>
+      <div class="fg"><label class="lbl">Use Categories</label>
+        <div class="flex gap12">${useCheckboxes('eq',['primary','secondary','aging'])}</div></div>
+      <div class="flex gap8 mt8">
+        <button class="btn btn-p btn-sm" onclick="saveEq()">Add</button>
+        <button class="btn btn-s btn-sm" onclick="S.ui.showEqForm=false;render()">Cancel</button>
+      </div></div>` : '';
+
+  const eqCondLabel=e=>{
+    if(e.type!=='barrel'&&e.material!=='oak') return '';
+    return (e.condition==='used')?` · <span style="color:#a9713a">used ×${e.timesUsed||0}</span>`:' · <span style="color:#1e8449">new</span>';
+  };
+  const eqCard=e=>{
+    const reuses=e.reuses||0, slots=e.qty*(1+reuses);
+    return `<div class="info-card">
+      <div class="info-card-hdr">
+        <span class="badge badge-white" style="flex-shrink:0">${e.type}</span>
+        <div class="info-card-name">${e.name}</div>
+        <div class="info-card-acts">
+          <button class="btn btn-s btn-xs" onclick="S.ui.editingEqId='${e.id}';S.ui.showEqForm=false;render()">✏</button>
+          <button class="btn btn-d btn-xs" onclick="delEq('${e.id}')">✕</button>
+        </div>
+      </div>
+      <div class="spec-row"><span class="k">Material</span><span class="v" style="font-weight:normal">${e.material}${e.oakType?' ('+e.oakType+')':''}${eqCondLabel(e)}</span></div>
+      <div class="spec-row"><span class="k">Volume</span><span class="v">${e.volumeGal} gal each</span></div>
+      <div class="spec-row"><span class="k">Quantity</span><span class="v"><input type="number" class="fc" style="width:54px;padding:2px 5px;text-align:center;display:inline-block" value="${e.qty}" min="1" max="99" onchange="setEqField('${e.id}','qty',+this.value)"></span></div>
+      <div class="spec-row"><span class="k">Reuses / turnovers</span><span class="v"><input type="number" class="fc" style="width:50px;padding:2px 5px;text-align:center;display:inline-block" value="${reuses}" min="0" max="20" onchange="setEqField('${e.id}','reuses',+this.value)">${reuses>0?` <span style="font-weight:normal;color:var(--muted);font-size:11px">= ${slots} uses</span>`:''}</span></div>
+      <div class="spec-row" style="border-bottom:none;padding-top:5px"><span class="k">Stage uses</span><span class="uses-row">${useChips(e.id,e.uses||[])}</span></div>
+    </div>`;
+  };
+  const groupTable=items=>`<div class="card-grid">${items.map(eqCard).join('')}</div>`;
+  const GROUPS=[['primary','🪣 Primary Fermenters'],['secondary','⚗️ Secondary Vessels'],['aging','🛢 Aging Vessels']];
+  const gc=S.ui.eqGroupCollapsed||(S.ui.eqGroupCollapsed={});
+  const groupBlock=(u,lbl,items,accent)=>{
+    const collapsed=!!gc[u];
+    const totSlots=items.reduce((s,e)=>s+e.qty*(1+(e.reuses||0)),0);
+    const totVol=items.reduce((s,e)=>s+e.volumeGal*e.qty,0);
+    return `<div style="margin-top:10px">
+      <div class="txt-b" style="color:${accent};font-size:13px;margin-bottom:4px;cursor:pointer" onclick="toggleEqGroup('${u}')" title="Collapse / expand">
+        ${collapsed?'▸':'▾'} ${lbl}
+        <span style="font-weight:normal;color:var(--muted);font-size:11px">— ${items.length} type${items.length===1?'':'s'} · ${totSlots} total uses · ${fmtGal(totVol)}</span></div>
+      ${collapsed?'':(items.length?groupTable(items):'<div class="txt-s txt-m" style="padding:2px 0 6px">None assigned to this stage.</div>')}
+    </div>`;
+  };
+  const body=S.equipment.length?`
+    ${editForm}${addForm}
+    ${GROUPS.map(([u,lbl])=>groupBlock(u,lbl,S.equipment.filter(e=>(e.uses||[]).includes(u)),'var(--burg)')).join('')}
+    ${(()=>{const uncat=S.equipment.filter(e=>!(e.uses||[]).length);return uncat.length?groupBlock('unassigned','❔ Unassigned',uncat,'var(--muted)'):'';})()}
+    <div class="info-note mt8" style="font-size:11px">💡 <b>Reuses</b> = extra turnovers per season, so one vessel can serve staggered crushes (e.g. buckets emptied and refilled, barrels reused). <b>Qty × (1+reuses)</b> = total uses available. Barrel <b>condition</b> tracks new vs. times-used oak. Click a category heading to collapse it; click P/S/A chips to reassign stages.</div>`
+    :`<div class="empty"><div class="empty-icon">🛢</div><p>No equipment yet</p></div>`;
+
+  return `<div class="panel">
+    <div class="ph">
+      <div class="pt">🛢 Equipment Arsenal</div>
+      <button class="btn btn-p btn-sm" onclick="S.ui.showEqForm=!S.ui.showEqForm;S.ui.editingEqId=null;render()">+ Add</button></div>
+    ${body}
+  </div>`;
+}
+
+function renderGrapePanel(){
+  const editGrape = S.ui.editingGrapeId ? grapeById(S.ui.editingGrapeId) : null;
+  const periodOpts = sel => PERIODS.map(p=>`<option value="${p}" ${p===sel?'selected':''}>${p}</option>`).join('');
+  const monthOpts  = sel => MONTHS.map(m=>`<option value="${m}" ${m===sel?'selected':''}>${m}</option>`).join('');
+
+  const editForm = editGrape ? `
+    <div class="ifrm"><div class="ifrm-t">✏ Edit — ${editGrape.name}</div>
+      <div class="g2">
+        <div class="fg"><label class="lbl">Variety Name</label><input class="fc" id="ge-n" value="${editGrape.name}"></div>
+        <div class="fg"><label class="lbl">Type</label>
+          <select class="fc" id="ge-t">
+            <option value="red" ${editGrape.type==='red'?'selected':''}>🔴 Red</option>
+            <option value="white" ${editGrape.type==='white'?'selected':''}>⚪ White</option></select></div>
+        <div class="fg"><label class="lbl">Available Pounds</label>
+          <input class="fc" type="number" id="ge-p" value="${editGrape.pounds}" min="1"></div>
+        <div class="fg"><label class="lbl">Lbs per Gal</label>
+          <input class="fc" type="number" id="ge-lpg" value="${editGrape.lbsPerGal}" step="0.5" min="8" max="20"></div>
+        <div class="fg"><label class="lbl">Origin / Region</label>
+          <input class="fc" id="ge-origin" value="${editGrape.origin||''}" placeholder="e.g. Napa Valley"></div>
+        <div class="fg"><label class="lbl">Target Brix at Harvest</label>
+          <input class="fc" type="number" id="ge-brix" value="${editGrape.targetBrix||''}" step="0.5" min="18" max="30" placeholder="e.g. 24"></div>
+      </div>
+      <div class="fg"><label class="lbl">Predicted Harvest Window</label>
+        <div class="harvest-row">
+          <div><div class="lbl" style="margin-bottom:3px">From</div>
+            <div class="period-month">
+              <select class="fc" id="ge-hsp">${periodOpts(editGrape.harvestStartPeriod||'Early')}</select>
+              <select class="fc" id="ge-hsm">${monthOpts(editGrape.harvestStartMonth||'September')}</select>
+            </div></div>
+          <div><div class="lbl" style="margin-bottom:3px">To</div>
+            <div class="period-month">
+              <select class="fc" id="ge-hep">${periodOpts(editGrape.harvestEndPeriod||'Mid')}</select>
+              <select class="fc" id="ge-hem">${monthOpts(editGrape.harvestEndMonth||'October')}</select>
+            </div></div>
+        </div></div>
+      <div class="flex gap8 mt8">
+        <button class="btn btn-p btn-sm" onclick="saveGrapeEdit('${editGrape.id}')">Save Changes</button>
+        <button class="btn btn-s btn-sm" onclick="S.ui.editingGrapeId=null;render()">Cancel</button>
+      </div></div>` : '';
+
+  const addForm = S.ui.showGrapeForm ? `
+    <div class="ifrm"><div class="ifrm-t">Add Grape Variety</div>
+      <div class="g2">
+        <div class="fg"><label class="lbl">Variety Name</label><input class="fc" id="g-n" placeholder="e.g. Cabernet Sauvignon"></div>
+        <div class="fg"><label class="lbl">Type</label>
+          <select class="fc" id="g-t" onchange="setGrapeDefaults()">
+            <option value="red">🔴 Red</option><option value="white">⚪ White</option></select></div>
+        <div class="fg"><label class="lbl">Available Pounds</label><input class="fc" type="number" id="g-p" min="1"></div>
+        <div class="fg"><label class="lbl">Lbs per Gal</label>
+          <input class="fc" type="number" id="g-lpg" value="13" step="0.5" min="8" max="20"></div>
+        <div class="fg"><label class="lbl">Origin / Region</label><input class="fc" id="g-origin" placeholder="e.g. Napa Valley"></div>
+        <div class="fg"><label class="lbl">Target Brix at Harvest</label>
+          <input class="fc" type="number" id="g-brix" step="0.5" min="18" max="30" placeholder="e.g. 24"></div>
+      </div>
+      <div class="fg"><label class="lbl">Predicted Harvest Window</label>
+        <div class="harvest-row">
+          <div><div class="lbl" style="margin-bottom:3px">From</div>
+            <div class="period-month">
+              <select class="fc" id="g-hsp">${periodOpts('Early')}</select>
+              <select class="fc" id="g-hsm">${monthOpts('September')}</select>
+            </div></div>
+          <div><div class="lbl" style="margin-bottom:3px">To</div>
+            <div class="period-month">
+              <select class="fc" id="g-hep">${periodOpts('Mid')}</select>
+              <select class="fc" id="g-hem">${monthOpts('October')}</select>
+            </div></div>
+        </div></div>
+      <div class="flex gap8 mt8">
+        <button class="btn btn-p btn-sm" onclick="saveGrape()">Add</button>
+        <button class="btn btn-s btn-sm" onclick="S.ui.showGrapeForm=false;render()">Cancel</button>
+      </div></div>` : '';
+
+  const allocMap = calcGrapeAllocations();
+  const cards = S.grapes.map(g=>{
+    const gActive = g.active!==false;
+    const alloc = allocMap.get(g.id);
+    const usedLbs = alloc?.usedLbs||0;
+    const remainLbs = alloc?.remainingLbs??g.pounds;
+    const allocList = (alloc?.allocations||[]).filter(a=>a.allocated>0).map(a=>`${a.wineName}: ${Math.round(a.allocated)} lbs`).join(' · ');
+    const overcommitted = usedLbs > g.pounds + 0.01;
+    const harvest=`${g.harvestStartPeriod||''} ${g.harvestStartMonth||''} – ${g.harvestEndPeriod||''} ${g.harvestEndMonth||''}`.trim();
+    return `<div class="info-card${gActive?'':' dim'}">
+      <div class="info-card-hdr">
+        <span class="badge badge-${g.type}" style="flex-shrink:0">${g.type==='red'?'🔴':'⚪'}</span>
+        <div class="info-card-name">${g.name}${gActive?'':' <span class="card-inactive-tag">INACTIVE</span>'}${g.origin?`<div class="txt-s txt-m" style="font-weight:normal;font-size:11px">${g.origin}</div>`:''}</div>
+        <div class="info-card-acts">
+          <button class="btn btn-s btn-xs" style="${gActive?'':'background:#e8f5e9;color:#1e8449'}" title="${gActive?'Mark inactive — grapes not guaranteed / not coming':'Mark active'}" onclick="toggleGrapeActive('${g.id}')">${gActive?'⏻':'✓'}</button>
+          <button class="btn btn-s btn-xs" onclick="S.ui.editingGrapeId='${g.id}';S.ui.showGrapeForm=false;render()">✏</button>
+          <button class="btn btn-d btn-xs" onclick="delGrape('${g.id}')">✕</button>
+        </div>
+      </div>
+      <div class="spec-row"><span class="k">Total harvest</span><span class="v">${g.pounds} lbs</span></div>
+      <div class="spec-row"><span class="k">Committed</span><span class="v" style="color:${overcommitted?'#c0392b':usedLbs>0?'#1e8449':'var(--muted)'}">${usedLbs>0?Math.round(usedLbs)+' lbs':'—'}</span></div>
+      <div class="spec-row"><span class="k">Remaining</span><span class="v" style="color:${overcommitted?'#c0392b':remainLbs<g.pounds*0.1?'#e67e22':'#1e8449'}">${Math.round(remainLbs)} lbs${overcommitted?' ⚠':''}</span></div>
+      ${allocList?`<div style="font-size:10px;color:var(--muted);padding:3px 0 1px">→ ${allocList}</div>`:''}
+      <div class="spec-row"><span class="k">Lbs / gal</span><span class="v">${g.lbsPerGal}</span></div>
+      <div class="spec-row"><span class="k">Target Brix</span><span class="v">${g.targetBrix?g.targetBrix+'°':'—'}</span></div>
+      ${harvest?`<div class="spec-row"><span class="k">Harvest</span><span class="v" style="font-size:11px">${harvest}</span></div>`:''}
+    </div>`;
+  }).join('');
+
+  return `<div class="panel">
+    <div class="ph"><div class="pt">🍇 Grape Varieties</div>
+      <button class="btn btn-p btn-sm" onclick="S.ui.showGrapeForm=!S.ui.showGrapeForm;S.ui.editingGrapeId=null;render()">+ Add</button></div>
+    ${editForm}${addForm}
+    ${S.grapes.length?`<div class="card-grid">${cards}</div>`
+    :`<div class="empty"><div class="empty-icon">🍇</div><p>No grapes yet</p></div>`}
+  </div>`;
+}
+
+function renderCustomYeastsPanel(){
+  const custom = S.customYeasts||[];
+  const editY = S.ui.editingYeastId ? custom.find(y=>y.id===S.ui.editingYeastId) : null;
+  const tagCb = (prefix,tags,tag,label) =>
+    `<label class="tog-wrap" style="margin-right:10px">
+      <input type="checkbox" id="${prefix}-tag-${tag}" ${(tags||[]).includes(tag)?'checked':''}>
+      <span class="lbl" style="margin:0">${label}</span></label>`;
+
+  const buildForm = (prefix, y, saveCmd, cancelCmd) => `
+    <div class="ifrm"><div class="ifrm-t">${y?'✏ Edit Yeast — '+y.name:'Add Custom Yeast'}</div>
+      <div class="g3">
+        <div class="fg"><label class="lbl">Yeast Name *</label>
+          <input class="fc" id="${prefix}-name" value="${y?.name||''}" placeholder="e.g. My House Yeast"></div>
+        <div class="fg"><label class="lbl">Lab / Brand</label>
+          <input class="fc" id="${prefix}-brand" value="${y?.brand||''}" placeholder="e.g. Home Lab"></div>
+        <div class="fg"><label class="lbl">Max Alcohol %</label>
+          <input class="fc" type="number" id="${prefix}-alc" value="${y?.alc||''}" step="0.5" min="8" max="21" placeholder="e.g. 15"></div>
+        <div class="fg"><label class="lbl">Temperature Range</label>
+          <input class="fc" id="${prefix}-temp" value="${y?.temp||''}" placeholder="e.g. 15–28°C"></div>
+      </div>
+      <div class="fg"><label class="lbl">Description / Notes</label>
+        <textarea class="fc" id="${prefix}-desc" rows="2" placeholder="Flavour profile, characteristics, tips…" style="resize:vertical">${y?.desc||''}</textarea></div>
+      <div class="fg"><label class="lbl">Style Tags</label>
+        <div class="flex fai gap12 mt4">
+          ${tagCb(prefix,y?.tags,'red','🔴 Red')}
+          ${tagCb(prefix,y?.tags,'white','⚪ White')}
+          ${tagCb(prefix,y?.tags,'rose','🌹 Rosé')}
+        </div></div>
+      <div class="flex gap8 mt8">
+        <button class="btn btn-p btn-sm" onclick="${saveCmd}">${y?'Save Changes':'Add Yeast'}</button>
+        <button class="btn btn-s btn-sm" onclick="${cancelCmd}">Cancel</button>
+      </div></div>`;
+
+  const editForm = editY ? buildForm('cy-edit', editY,
+    `saveCustomYeastEdit('${editY.id}')`, `S.ui.editingYeastId=null;render()`) : '';
+  const addForm = S.ui.showCustomYeastForm ? buildForm('cy', null,
+    `saveCustomYeast()`, `S.ui.showCustomYeastForm=false;render()`) : '';
+
+  const rows = custom.map(y=>`
+    <tr>
+      <td class="txt-b">${y.name}</td>
+      <td>${y.brand||'—'}</td>
+      <td>${y.alc?y.alc+'%':'—'}</td>
+      <td>${y.temp||'—'}</td>
+      <td>${(y.tags||[]).map(t=>t==='red'?'🔴':t==='white'?'⚪':'🌹').join(' ')||'—'}</td>
+      <td style="max-width:220px;font-size:11px;color:var(--muted)">${(y.desc||'').slice(0,60)+(y.desc?.length>60?'…':'')}</td>
+      <td><div class="flex gap4">
+        <button class="btn btn-s btn-xs" onclick="S.ui.editingYeastId='${y.id}';S.ui.showCustomYeastForm=false;render()">✏</button>
+        <button class="btn btn-d btn-xs" onclick="delCustomYeast('${y.id}')">✕</button>
+      </div></td>
+    </tr>`).join('');
+
+  return `<div class="panel">
+    <div class="ph"><div class="pt">✏ Custom Yeasts</div>
+      <button class="btn btn-p btn-sm" onclick="S.ui.showCustomYeastForm=!S.ui.showCustomYeastForm;S.ui.editingYeastId=null;render()">+ Add</button></div>
+    ${editForm}${addForm}
+    ${custom.length?`<table class="tbl"><thead>
+      <tr><th>Name</th><th>Brand</th><th>Max Alc</th><th>Temp</th><th>Styles</th><th>Notes</th><th></th></tr>
+      </thead><tbody>${rows}</tbody></table>`
+    :`<div class="txt-s txt-m" style="padding:8px 0">No custom yeasts yet. Add your own strains to use them in Wine Projects.</div>`}
+    <div class="info-note mt8" style="font-size:11px">💡 Custom yeasts appear in all yeast dropdowns under "Custom" and are recommended alongside built-in strains.</div>
+  </div>`;
+}
+// ════════════════════════════════════════════
+// WINES TAB
+// ════════════════════════════════════════════
+function renderWines(){
+  const items=S.wines.map(w=>{
+    const on=w.active!==false;
+    return `
+    <div class="wine-item${w.id===S.ui.wineId?' active':''}" style="${on?'':'opacity:.45'}" onclick="S.ui.wineId='${w.id}';render()">
+      <span class="dot dot-${w.color}"></span>
+      <span style="flex:1">${w.name}</span>
+      ${on?'':'<span style="font-size:9px;background:#eee;border:1px solid #ccc;border-radius:3px;padding:1px 4px;color:#888">OFF</span>'}
+      <span class="badge badge-${w.color}" style="font-size:10px">${w.wineType}</span>
+      <span title="${on?'Turn off (exclude from plan)':'Turn on'}" style="cursor:pointer;font-size:12px;padding:0 2px;color:${on?'#1e8449':'#bbb'}" onclick="event.stopPropagation();toggleWineActive('${w.id}')">⏻</span>
+    </div>`}).join('');
+  const detail=S.ui.wineId?renderWineDetail(wineById(S.ui.wineId))
+    :`<div class="empty"><div class="empty-icon">🍾</div><p>Select or create a wine project</p></div>`;
+  return `${renderBlendIdeas()}
+  <div class="wines-layout">
+    <div class="wine-sidebar">
+      <div class="ph"><div class="pt" style="font-size:13px">Wine Projects</div>
+        <div class="flex gap4">
+          <button class="btn btn-s btn-xs" onclick="S.ui.showBlendIdeas=!S.ui.showBlendIdeas;render()" title="Start from a classic blend recipe">💡 Blend Ideas</button>
+          <button class="btn btn-p btn-xs" onclick="newWine()">+</button></div></div>
+      ${items||'<div class="txt-s txt-m">No wines yet</div>'}
+    </div>
+    <div>${detail}</div>
+  </div>
+  ${renderSVConsolidationPanel()}`;
+}
+
+function renderBlendIdeas(){
+  if(!S.ui.showBlendIdeas) return '';
+  const idx=S.ui.blendIdeaIdx??0;
+  const vol=S.ui.blendIdeaVol||30;
+  const tpl=BLEND_TEMPLATES[idx];
+  const plan=blendIdeaPlan(tpl,vol);
+  const opts=BLEND_TEMPLATES.map((t,i)=>`<option value="${i}" ${i===idx?'selected':''}>${t.color==='white'?'⚪':'🔴'} ${t.name}</option>`).join('');
+  const rows=plan.map(p=>{
+    const have=p.existing;
+    const enough=have&&p.remainLbs>=p.lbsNeeded-0.5;
+    const status=have
+      ? (enough?`<span class="ok">✔ have ${Math.round(p.remainLbs)} lbs free</span>`:`<span class="warn">⚠ have ${Math.round(p.totalLbs)} lbs, ${Math.round(p.remainLbs)} free</span>`)
+      : `<span style="color:#c0392b">✚ not in inventory — will add</span>`;
+    return `<tr>
+      <td class="txt-b">${p.name}</td>
+      <td>${p.pct}%</td>
+      <td>${fmtGal(p.secGal)}</td>
+      <td><b>${Math.round(p.lbsNeeded)} lbs</b></td>
+      <td style="font-size:11px">${status}</td>
+    </tr>`;
+  }).join('');
+  const missing=plan.filter(p=>!p.existing).length;
+  return `<div class="panel" style="border-left:4px solid var(--burg)">
+    <div class="ph"><div class="pt">💡 Start from a Blend Idea</div>
+      <button class="btn btn-s btn-xs" onclick="S.ui.showBlendIdeas=false;render()">✕ Close</button></div>
+    <div class="info-note mb8">Pick a classic recipe and a target vessel size — it tells you which grapes you need and how many pounds, then builds the project for you.</div>
+    <div class="flex fai gap12 mb8" style="flex-wrap:wrap">
+      <div class="fg" style="margin:0;min-width:220px"><label class="lbl">Blend style</label>
+        <select class="fc" onchange="S.ui.blendIdeaIdx=+this.value;render()">${opts}</select></div>
+      <div class="fg" style="margin:0"><label class="lbl">Target aging volume (gal)</label>
+        <input class="fc trk-num" type="number" step="1" min="1" value="${vol}" style="width:90px" onchange="S.ui.blendIdeaVol=+this.value;render()"></div>
+    </div>
+    <div class="txt-s txt-m mb8" style="font-style:italic">${tpl.note}</div>
+    <table class="tbl"><thead><tr><th>Grape</th><th>Ratio</th><th>Blend gal</th><th>Grapes needed</th><th>In your inventory?</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <div class="flex gap8 mt8" style="flex-wrap:wrap">
+      <button class="btn btn-p btn-sm" onclick="createBlendFromIdea(${idx},${vol})">✓ Create this blend project${missing?` (+ add ${missing} grape${missing>1?'s':''})`:''}</button>
+    </div>
+    <div class="info-note mt8" style="font-size:11px">${missing?`Grapes not already in your list will be added with the suggested poundage and marked “suggested” — update their source and amounts to match what you actually buy.`:'All grapes are already in your inventory.'} Ratios and vessel are pre-filled; tune everything after creating.</div>
+  </div>`;
+}
+
+function renderWineDetail(w){
+  if(!w) return '';
+  const calc=calcWine(w);
+  return `<div class="panel">
+    <div class="ph">
+      <div><div class="pt">${w.name}${w.active===false?' <span style="font-size:10px;background:#eee;border:1px solid #ccc;border-radius:3px;padding:1px 5px;color:#888;vertical-align:middle">INACTIVE</span>':''}</div>
+        <div class="flex gap8 mt4">
+          <span class="badge badge-${w.color}">${w.color.toUpperCase()}</span>
+          <span class="badge badge-white">${w.wineType==='blend'?'Blend':'Single Varietal'}</span>
+          <label class="tog-wrap" title="Inactive wines are kept but excluded from allocations and the flowchart">
+            <input class="tog" type="checkbox" ${w.active!==false?'checked':''} onchange="toggleWineActive('${w.id}')">
+            <span class="lbl" style="margin:0">Active</span></label>
+        </div></div>
+      <div class="flex gap8">
+        <button class="btn btn-s btn-sm" onclick="switchTab('flowchart')">View Flowchart</button>
+        <button class="btn btn-d btn-sm" onclick="delWine('${w.id}')">Delete</button>
+      </div></div>
+    <div class="g2">
+      <div class="fg"><label class="lbl">Wine Name</label>
+        <input class="fc" value="${w.name}" onchange="updateWine('${w.id}','name',this.value)"></div>
+      <div class="fg"><label class="lbl">Color</label>
+        <select class="fc" onchange="updateWine('${w.id}','color',this.value)">
+          <option value="red" ${w.color==='red'?'selected':''}>🔴 Red</option>
+          <option value="white" ${w.color==='white'?'selected':''}>⚪ White</option></select></div>
+      <div class="fg"><label class="lbl">Wine Type</label>
+        <select class="fc" onchange="updateWine('${w.id}','wineType',this.value)">
+          <option value="single" ${w.wineType==='single'?'selected':''}>Single Varietal</option>
+          <option value="blend" ${w.wineType==='blend'?'selected':''}>Blend</option></select></div>
+    </div>
+    <div class="sdiv">🛢 Aging Vessel${w.wineType==='blend'?' — Blend Target':' — Production Target'}</div>
+    ${w.wineType==='blend'
+      ?`<div class="info-note mb8">💡 <b>Blends have grape priority:</b> each blend claims only the lbs its portion needs (so one grape can feed several blends), then dedicated single varietals, and any leftover grapes automatically become single-variety wine, united by yeast.</div>`
+      :`<div class="info-note mb8">💡 Aging vessel is the production target. Back-calculation shows how many grapes you need.</div>`}
+    <div class="g2">
+      <div class="fg"><label class="lbl">Select from Arsenal</label>
+        <select class="fc" onchange="pickAgingEq('${w.id}',this.value)">${eqOpts(w.agingEquipmentId,'— Custom —','aging')}</select></div>
+      <div class="fg"><label class="lbl">Volume (gallons)</label>
+        <input class="fc" type="number" value="${w.agingVolumeGal||''}" step="0.1" min="1"
+          onchange="updateWine('${w.id}','agingVolumeGal',+this.value)"></div>
+    </div>
+    <div class="fg"><label class="tog-wrap"><input class="tog" type="checkbox" ${w.useOak?'checked':''}
+        onchange="updateWine('${w.id}','useOak',this.checked)">
+      <span class="lbl" style="margin:0">Oak Aging</span></label></div>
+    ${w.useOak?`<div class="fg"><label class="lbl">Oak Type</label>
+      <select class="fc" onchange="updateWine('${w.id}','oakType',this.value)">
+        <option value="french" ${w.oakType==='french'?'selected':''}>French Oak</option>
+        <option value="american" ${w.oakType==='american'?'selected':''}>American Oak</option>
+        <option value="hungarian" ${w.oakType==='hungarian'?'selected':''}>Hungarian Oak</option>
+      </select></div>`:''}
+    ${w.wineType==='single'?renderSingleSection(w,calc):renderBlendSection(w,calc)}
+    ${calc?renderCalcSummary(w,calc):`<div class="info-note mt8">⚠ Set aging vessel volume to see calculations.</div>`}
+  </div>`;
+}
+
+function renderYeastAndTankSection(wid,ci,yeastId,useTankSplit,tanks,totalMustGal,wineColor,grapeId,isBlend){
+  const grape=grapeById(grapeId), grapeName=grape?.name||'';
+  const ciStr=ci!==null&&ci!==undefined?String(ci):'null';
+  const tankPctTotal=tanks?tanks.reduce((s,t)=>s+(parseFloat(t.percent)||0),0):0;
+  const tankPctOk=Math.abs(tankPctTotal-100)<1;
+  const tankCards=(useTankSplit&&tanks&&tanks.length>0)?tanks.map((t,ti)=>{
+    const tankSec=(t.percent/100*(totalMustGal||0)*LOSS.pToS);
+    return `<div class="tank-card">
+      <div class="tank-card-hdr">
+        <input class="fc" style="width:90px;padding:3px 7px" value="${t.name}" placeholder="Tank A"
+          onchange="updateTank('${wid}',${ciStr},${ti},'name',this.value)">
+        <div class="flex fai gap4"><span class="lbl" style="margin:0">Grapes:</span>
+          <input class="fc" type="number" style="width:60px;padding:3px 5px;text-align:center" value="${t.percent}" min="0" max="100"
+            onchange="updateTank('${wid}',${ciStr},${ti},'percent',+this.value)">
+          <span class="txt-s">%</span></div>
+        ${isBlend?`<div class="flex fai gap4"><span class="lbl" style="margin:0">→ Blend:</span>
+          <input class="fc" type="number" style="width:60px;padding:3px 5px;text-align:center" value="${t.blendPct}" min="0" max="100"
+            onchange="updateTank('${wid}',${ciStr},${ti},'blendPct',+this.value)">
+          <span class="txt-s">%</span></div>`:''}
+        <button class="btn btn-d btn-xs" onclick="removeTank('${wid}',${ciStr},${ti})">✕</button>
+      </div>
+      <div class="fg mb4"><label class="lbl">Yeast</label>
+        <select class="fc" onchange="updateTank('${wid}',${ciStr},${ti},'yeastId',this.value)">
+          ${yeastOpts(t.yeastId,grapeName)}</select></div>
+      ${renderYeastInfo(t.yeastId)}
+      ${totalMustGal?`<div class="txt-s txt-m mt4">Must: ${fmtGal(t.percent/100*totalMustGal)} · Secondary: ${fmtGal(tankSec)}
+        ${isBlend?`· Blend: ${fmtGal(tankSec*t.blendPct/100)} · SV: ${fmtGal(tankSec*(1-t.blendPct/100))}`:''}
+      </div>`:''}
+    </div>`;
+  }).join(''):'';
+
+  return `<div class="sdiv">🧪 Yeast & Fermentation</div>
+    <div class="fg"><label class="lbl">Default Yeast${useTankSplit?' (used when not split)':''}</label>
+      <select class="fc" onchange="${ci!==null&&ci!==undefined?`updateComp('${wid}',${ci},'yeastId',this.value)`:`updateWine('${wid}','yeastId',this.value)`}">
+        ${yeastOpts(yeastId,grapeName)}</select></div>
+    ${!useTankSplit?renderYeastInfo(yeastId):''}
+    <div class="fg mt8"><label class="tog-wrap">
+      <input class="tog" type="checkbox" ${useTankSplit?'checked':''}
+        onchange="${ci!==null&&ci!==undefined?`updateComp('${wid}',${ci},'useTankSplit',this.checked)`:`updateWine('${wid}','useTankSplit',this.checked)`}">
+      <span style="font-weight:bold;font-size:13px">Split into multiple tanks</span></label>
+      <div class="txt-s txt-m mt4">Use different yeasts per tank${isBlend?' and set per-tank blend allocation':''}</div>
+    </div>
+    ${useTankSplit?`
+      <div class="flex fai gap8 mb8 mt8">
+        <span class="tank-pct-total ${tankPctOk?'tpt-ok':'tpt-bad'}">
+          Split total: ${tankPctTotal.toFixed(0)}%${tankPctOk?' ✔':' — must equal 100%'}</span>
+        <button class="btn btn-s btn-sm" onclick="addTank('${wid}',${ciStr})">+ Add Tank</button>
+      </div>
+      ${tankCards||'<div class="txt-s txt-m">No tanks yet — click Add Tank.</div>'}
+    `:''}`;
+}
+
+function renderSingleSection(w,calc){
+  const cc=calc?.components[0];
+  return `
+    <div class="sdiv">Primary & Secondary Fermentation</div>
+    <div class="g2">
+      <div class="fg"><label class="lbl">Grape Variety</label>
+        <select class="fc" onchange="updateWine('${w.id}','grapeId',this.value)">
+          <option value="">— Select —</option>
+          ${S.grapes.map(g=>`<option value="${g.id}" ${w.grapeId===g.id?'selected':''}>${g.name} (${g.type})</option>`).join('')}
+        </select></div>
+      <div class="fg"><label class="lbl">Primary Fermenter</label>
+        <select class="fc" onchange="updateWine('${w.id}','primaryEquipmentId',this.value)">${eqOpts(w.primaryEquipmentId,'— Pick Vessel —','primary')}</select></div>
+      <div class="fg"><label class="lbl">Secondary Fermenter</label>
+        <select class="fc" onchange="updateWine('${w.id}','secondaryEquipmentId',this.value)">${eqOpts(w.secondaryEquipmentId,'— Pick Vessel —','secondary')}</select></div>
+      ${cc?`<div class="fg"><label class="lbl">Grapes Needed</label>
+        <div class="fc fc-ro">${fmtLbs(calc.grapsNeeded)} needed · ${cc.availLbs} lbs available
+          <span class="${cc.sufficient?'ok':'warn'}">${cc.sufficient?'✔ sufficient':'⚠ short '+fmtLbs(calc.grapsNeeded-cc.availLbs)}</span>
+        </div></div>`:''}
+    </div>
+    ${renderYeastAndTankSection(w.id,null,w.yeastId,w.useTankSplit,w.tanks,calc?.totalMustGal,w.color,w.grapeId,false)}
+    ${w.color==='red'?renderSingleRose(w,calc):''}`;
+}
+
+function renderRoseYeastBlock(yeastId, changeHandler, grapeName){
+  return `<div class="fg mt8">
+    <label class="lbl">🌹 Rosé Yeast</label>
+    <select class="fc" onchange="${changeHandler}">${yeastOpts(yeastId,grapeName)}</select>
+    ${renderYeastInfo(yeastId)}
+  </div>`;
+}
+
+function renderSingleRose(w,calc){
+  const cc=calc?.components[0];
+  const grape=grapeById(w.grapeId);
+  return `<div class="sdiv">🌹 Rosé via Saignée</div>
+    <div class="rose-section">
+      <div class="flex fai gap8 mb8">
+        <input class="tog" type="checkbox" ${w.hasRose?'checked':''} onchange="updateWine('${w.id}','hasRose',this.checked)">
+        <span style="color:var(--rose-dk);font-weight:bold;font-size:13px">Enable Saignée Rosé</span>
+      </div>
+      ${w.hasRose?`
+        <div class="g2">
+          <div class="fg"><label class="lbl">Bleed-off %</label>
+            <div class="flex fai gap8">
+              <input type="number" class="fc" min="1" max="50" step="0.5" value="${w.saigneePercent}" style="width:90px"
+                onchange="updateWine('${w.id}','saigneePercent',Math.min(50,Math.max(1,+this.value)))">
+              <span style="font-weight:bold;color:var(--rose-dk);font-size:13px">%</span></div></div>
+          <div class="fg"><label class="lbl">Rosé Aging Vessel</label>
+            <select class="fc" onchange="pickRoseEq('${w.id}',null,this.value)">${eqOpts(w.roseAgingEquipmentId,'— Pick Vessel —','aging')}</select></div>
+        </div>
+        ${renderRoseYeastBlock(w.roseYeastId,`updateWine('${w.id}','roseYeastId',this.value)`,grape?.name||'')}
+        ${cc?.roseCalc?renderRoseCalcBox(cc.roseCalc):''}`:''}</div>`;
+}
+
+function renderBlendSection(w,calc){
+  const totRatio=w.components.reduce((s,c)=>s+(parseFloat(c.ratio)||0),0);
+  const cards=w.components.map((comp,i)=>{
+    const cc=calc?.components[i];
+    const grape=grapeById(comp.grapeId);
+    const collapsedC=!!(S.ui.compCollapsed&&S.ui.compCollapsed[w.id+':'+i]);
+    const grapeOpts=S.grapes.map(g=>`<option value="${g.id}" ${g.id===comp.grapeId?'selected':''}>${g.name} (${g.type})</option>`).join('');
+    const hdr=`
+      <div class="comp-card-hdr" style="cursor:pointer${collapsedC?';margin-bottom:0;padding-bottom:0;border-bottom:none':''}" onclick="toggleComp('${w.id}',${i})" title="${collapsedC?'Expand':'Collapse'} this variety">
+        <div>
+          <div class="comp-card-eyebrow">${collapsedC?'▸':'▾'} Variety ${i+1}</div>
+          <span class="comp-card-title">${grape?grape.name:'— select grape —'}${cc&&(parseFloat(comp.ratio)||0)>0?`<span class="comp-card-gal">${(parseFloat(comp.ratio)||0).toFixed(0)}% = ${fmtGal(cc.blendPortionGal)} of blend</span>`:''}${cc&&cc.shortfall>0.05?`<span style="color:#c0392b;font-size:11px;margin-left:8px">⚠ short ${fmtGal(cc.shortfall)}</span>`:''}${collapsedC&&cc?.roseCalc?'<span style="font-size:12px;margin-left:8px">🌹</span>':''}</span>
+          ${comp.useTankSplit&&comp.tanks?.length>1&&cc?.tankResults?`<div class="comp-card-tanks">🪣 ${comp.tanks.map((t,ti)=>{
+            const tr=cc.tankResults[ti]; const y=yeastById(t.yeastId);
+            return `<b>${t.name||'Tank '+(ti+1)}</b> ${(parseFloat(t.percent)||0).toFixed(0)}% = ${tr?fmtGal(tr.mustGal):'—'} must${y?' · '+y.name:''}`;
+          }).join(' &nbsp;•&nbsp; ')}</div>`:''}
+        </div>
+        <button class="btn btn-d btn-xs" onclick="event.stopPropagation();removeComp('${w.id}',${i})">Remove</button>
+      </div>`;
+    if(collapsedC) return `<div class="comp-card">${hdr}</div>`;
+    return `<div class="comp-card">
+      ${hdr}
+      <div class="g3">
+        <div class="fg"><label class="lbl">Grape Variety</label>
+          <select class="fc" onchange="updateComp('${w.id}',${i},'grapeId',this.value)">
+            <option value="">— Select —</option>${grapeOpts}</select></div>
+        <div class="fg"><label class="lbl">Blend Ratio %</label>
+          <input class="fc" type="number" value="${comp.ratio}" min="0" max="100"
+            onchange="updateComp('${w.id}',${i},'ratio',+this.value)">
+          ${cc?`<div style="font-size:11px;color:var(--muted);margin-top:3px">= ${fmtGal(cc.blendPortionGal)} of blend secondary</div>`:''}</div>
+        <div class="fg"><label class="lbl">Primary Fermenter</label>
+          <select class="fc" onchange="updateComp('${w.id}',${i},'primaryEquipmentId',this.value)">
+            ${eqOpts(comp.primaryEquipmentId,'— Pick Vessel —','primary')}</select></div>
+        <div class="fg"><label class="lbl">Secondary Fermenter</label>
+          <select class="fc" onchange="updateComp('${w.id}',${i},'secondaryEquipmentId',this.value)">
+            ${eqOpts(comp.secondaryEquipmentId,'— Pick Vessel —','secondary')}</select></div>
+        <div class="fg"><label class="lbl">Single Variety Aging</label>
+          <select class="fc" onchange="updateComp('${w.id}',${i},'singleAgingEquipmentId',this.value)">
+            ${eqOpts(comp.singleAgingEquipmentId,'— Auto / Pick —','aging')}</select></div>
+      </div>
+      ${cc?renderCompCalc(cc,comp,w):''}
+      ${renderYeastAndTankSection(w.id,i,comp.yeastId,comp.useTankSplit,comp.tanks,cc?.totalMustGal,w.color,comp.grapeId,true)}
+      ${w.color==='red'?renderCompRose(w.id,i,comp,cc):''}
+    </div>`;
+  }).join('');
+  return `
+    <div class="sdiv">🍇 Blend Components — Separate Fermentation</div>
+    <div class="info-note mb8">Each variety ferments separately. After secondary, blend portion goes to aging vessel; excess becomes single variety wine.</div>
+    <div class="flex fai gap8 mb8">
+      <span class="ratio-total ${Math.abs(totRatio-100)<1?'rt-ok':'rt-bad'}">
+        Ratio total: ${totRatio.toFixed(0)}%${Math.abs(totRatio-100)<1?' ✔':' — must equal 100%'}</span>
+      <button class="btn btn-p btn-sm" onclick="addComp('${w.id}')">+ Add Variety</button>
+      ${w.components.length>1?`<button class="btn btn-s btn-sm" onclick="toggleAllComps('${w.id}')">${w.components.some((c,i)=>!(S.ui.compCollapsed||{})[w.id+':'+i])?'⊟ Collapse all':'⊞ Expand all'}</button>`:''}
+    </div>
+    ${cards||'<div class="txt-s txt-m mb8">No varieties added yet.</div>'}`;
+}
+
+function renderCompCalc(cc,comp,wine){
+  const svEq=byId(comp.singleAgingEquipmentId);
+  const totalLbs=cc.totalLbs||cc.availLbs;
+  const allocatedLbs=cc.availLbs;
+  const showAlloc=totalLbs>allocatedLbs;
+  return `<div class="comp-calc">
+    <div style="font-size:11px;font-weight:bold;color:var(--muted);margin-bottom:4px;text-transform:uppercase">Calculations</div>
+    ${showAlloc?`<div class="comp-calc-row"><span>Total grapes (harvest)</span><span class="comp-cv">${fmtLbs(totalLbs)}</span></div>
+    <div class="comp-calc-row"><span style="color:var(--muted)">Committed to other projects</span><span style="color:var(--muted)">− ${fmtLbs(totalLbs-allocatedLbs)}</span></div>
+    <div class="comp-calc-row" style="border-top:1px solid var(--border);padding-top:3px"><span><b>Available to this project</b></span><span class="comp-cv">${fmtLbs(allocatedLbs)}</span></div>`
+    :`<div class="comp-calc-row"><span>Available grapes</span><span class="comp-cv">${fmtLbs(allocatedLbs)}</span></div>`}
+    <div class="comp-calc-row"><span>Total must (forward)</span><span class="comp-cv">${fmtGal(cc.totalMustGal)}</span></div>
+    ${cc.roseMustGal>0?`
+    <div class="comp-calc-row"><span>↳ Saignée (rosé must)</span><span class="comp-cv">${fmtGal(cc.roseMustGal)}</span></div>
+    <div class="comp-calc-row"><span>↳ Red must after bleed</span><span class="comp-cv">${fmtGal(cc.redMustGal)}</span></div>`:''}
+    <div class="comp-calc-row"><span>Secondary volume →</span><span class="comp-cv">${fmtGal(cc.compSecGal)}</span></div>
+    <div class="split-box">
+      <div class="split-item blend-item">
+        <div class="split-item-label">→ Blend portion</div>
+        <div>${fmtGal(cc.blendFromComp||cc.blendPortionGal)} (${cc.ratio.toFixed(0)}% of blend)</div>
+        ${cc.shortfall>0?`<div style="color:#c0392b;font-size:11px;margin-top:3px">⚠ Short ${fmtGal(cc.shortfall)}</div>`:'<div style="color:#1e8449;font-size:11px;margin-top:3px">✔ sufficient</div>'}
+      </div>
+      <div class="split-item sv-item">
+        <div class="split-item-label">→ Single variety</div>
+        ${cc.excessGal>0.05
+          ?`<div>${fmtGal(cc.excessGal)} to SV wine</div>
+            <div style="margin-top:3px">Aging: ${svEq?svEq.name:'auto '+fmtGal(cc.excessGal*LOSS.sToA)}</div>
+            <div>~${cc.singleCalc?.bottles||0} bottles</div>`
+          :`<div style="color:var(--muted);font-size:11px">No excess — all to blend</div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCompRose(wineId,idx,comp,cc){
+  const grape=grapeById(comp.grapeId);
+  return `<div class="rose-section">
+    <div class="flex fai gap8 mb8">
+      <input class="tog" type="checkbox" ${comp.hasRose?'checked':''}
+        onchange="updateComp('${wineId}',${idx},'hasRose',this.checked)">
+      <span style="color:var(--rose-dk);font-weight:bold;font-size:12px">🌹 Saignée Rosé from this variety</span>
+    </div>
+    ${comp.hasRose?`
+      <div class="g2">
+        <div class="fg"><label class="lbl">Bleed-off %</label>
+          <div class="flex fai gap8">
+            <input type="number" class="fc" min="1" max="50" step="0.5" value="${comp.saigneePercent}" style="width:90px"
+              onchange="updateComp('${wineId}',${idx},'saigneePercent',Math.min(50,Math.max(1,+this.value)))">
+            <span style="font-weight:bold;color:var(--rose-dk);font-size:13px">%</span></div></div>
+        <div class="fg"><label class="lbl">Rosé Aging Vessel</label>
+          <select class="fc" onchange="pickRoseEq('${wineId}',${idx},this.value)">
+            ${eqOpts(comp.roseAgingEquipmentId,'— Pick Vessel —','aging')}</select></div>
+      </div>
+      ${renderRoseYeastBlock(comp.roseYeastId,`updateComp('${wineId}',${idx},'roseYeastId',this.value)`,grape?.name||'')}
+      ${cc?.roseCalc?renderRoseCalcBox(cc.roseCalc):''}`:''}</div>`;
+}
+
+function renderRoseCalcBox(rc){
+  return `<div style="background:#fff;border:1px solid #e8b4c0;border-radius:var(--r);padding:8px;margin-top:8px;font-size:12px">
+    <div style="font-weight:bold;color:var(--rose-dk);margin-bottom:4px">🌹 Rosé Yield</div>
+    <div class="comp-calc-row"><span>Must from bleed-off</span><span class="comp-cv">${fmtGal(rc.primaryGal)}</span></div>
+    <div class="comp-calc-row"><span>Secondary</span><span class="comp-cv">${fmtGal(rc.secondaryGal)}</span></div>
+    <div class="comp-calc-row"><span>Aging vessel</span><span class="comp-cv">${fmtGal(rc.agingGal)}</span></div>
+    <div class="comp-calc-row"><span><b>Bottles (750ml)</b></span><span class="comp-cv">~${rc.bottles}</span></div>
+  </div>`;
+}
+
+function renderCalcSummary(w,calc){
+  if(w.wineType==='single'){
+    const grape=grapeById(w.grapeId);
+    const allocMap=calcGrapeAllocations();
+    const allocEntry=w.grapeId?allocMap.get(w.grapeId):null;
+    const totalLbs=grape?.pounds||0;
+    const usedByOthers=allocEntry?(allocEntry.usedLbs-(allocEntry.allocations.find(a=>a.wineId===w.id)?.allocated||0)):0;
+    return `<div class="calc-box"><div class="calc-title">📊 Summary</div>
+      <div class="info-note mb8" style="font-size:11px">Losses: primary→secondary 15% · secondary→aging 5% · aging→bottle 5%</div>
+      ${totalLbs>0?`<div class="calc-row"><span>Total grapes (harvest)</span><span class="cv">${fmtLbs(totalLbs)}</span></div>`:''}
+      ${usedByOthers>0?`<div class="calc-row"><span style="color:var(--muted)">Committed to other projects</span><span style="color:var(--muted)">− ${fmtLbs(usedByOthers)}</span></div>`:''}
+      ${totalLbs>0?`<div class="calc-row" style="border-top:1px solid var(--border);padding-top:4px"><span><b>Available to this project</b></span><span class="cv">${fmtLbs(calc.availLbs)}</span></div>`:''}
+      <div class="calc-row"><span>Grapes needed</span><span class="cv">${fmtLbs(calc.grapsNeeded)}</span></div>
+      <div class="calc-row"><span>Status</span><span>${calc.sufficient?`<span class="ok">✔ sufficient</span>`:`<span class="warn">⚠ short ${fmtLbs(calc.grapsNeeded-calc.availLbs)}</span>`}</span></div>
+      <div class="calc-row"><span>Primary must</span><span class="cv">${fmtGal(calc.totalMustGal)}</span></div>
+      <div class="calc-row"><span>Secondary</span><span class="cv">${fmtGal(calc.secondaryGal)}</span></div>
+      <div class="calc-row"><span>Aging vessel</span><span class="cv">${fmtGal(calc.agingGal)}</span></div>
+      <div class="calc-row"><span><b>🍾 Bottles</b></span><span class="cv" style="font-size:16px">~${calc.bottles}</span></div>
+    </div>`;
+  }
+  const compRows=calc.components.map(cc=>`
+    <div class="calc-row" style="padding-left:12px">
+      <span>↳ ${cc.name} (${cc.ratio.toFixed(0)}% = ${fmtGal(cc.blendPortionGal)}): ${fmtGal(cc.compSecGal)} secondary</span>
+      <span>${cc.shortfall>0?`<span class="warn">⚠ short ${fmtGal(cc.shortfall)}</span>`:'<span class="ok">✔</span>'}</span>
+    </div>
+    ${cc.singleCalc?`<div class="calc-row" style="padding-left:24px;color:var(--sv)">
+      <span>+ ${cc.name} SV: ~${cc.singleCalc.bottles} bottles (${fmtGal(cc.excessGal)} excess)</span><span></span></div>`:''}
+    ${cc.roseCalc?`<div class="calc-row" style="padding-left:24px;color:var(--rose-dk)">
+      <span>+ Rosé: ~${cc.roseCalc.bottles} bottles (${fmtGal(cc.roseCalc.primaryGal)} saignée)</span><span></span></div>`:''}
+  `).join('');
+  return `<div class="calc-box"><div class="calc-title">📊 Full Production Summary</div>
+    <div class="info-note mb8" style="font-size:11px">Losses: primary→secondary 15% · secondary→aging 5% · aging→bottle 5%</div>
+    <div class="calc-row"><span><b>Blend: ${w.name}</b></span><span class="cv">~${calc.blendBottles} bottles</span></div>
+    <div class="calc-row" style="padding-left:12px"><span>Blend secondary needed</span><span class="cv">${fmtGal(calc.blendSecNeeded)}</span></div>
+    <div class="calc-row" style="padding-left:12px"><span>Blend aging vessel</span><span class="cv">${fmtGal(calc.agingGal)}</span></div>
+    ${compRows}
+  </div>`;
+}
+function renderSVConsolidationPanel(){
+  const pools=calcSVConsolidation(); if(pools.size===0) return '';
+  const rows=[];
+  pools.forEach((p,key)=>{
+    const grape=grapeById(p.grapeId),yeast=yeastById(p.yeastId);
+    const sharedBadge=p.isShared
+      ?'<span class="badge" style="background:#e8f4fd;color:#1565c0;margin-left:6px;font-size:10px">Shared</span>':
+       '<span class="badge" style="background:#f0f0f0;color:#666;margin-left:6px;font-size:10px">Single Blend</span>';
+    const sourceList=[...new Set(p.sources.map(s=>{
+      const w=wineById(s.wineId); return w?w.name+(s.tankIdx!==null?' (tank '+(s.tankIdx+1)+')':''):'';
+    }))].filter(Boolean).join(', ');
+    const yeastLabel=yeast?(yeast.brand?'<span class="txt-s txt-m">'+yeast.brand+'</span> '+yeast.name:yeast.name):'—';
+    rows.push(`<tr>
+      <td><b>${grape?.name||p.grapeId}</b>${sharedBadge}</td>
+      <td style="font-size:12px">${yeastLabel}</td>
+      <td><span class="comp-cv">${fmtGal(p.totalExcessGal)}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${sourceList}</td>
+      <td><select class="fc" style="font-size:12px" onchange="setSVEquipment('${key}',this.value)">${eqOpts(p.eqId,'— Auto ('+fmtGal(p.agingGal)+') —','aging')}</select></td>
+      <td><span class="comp-cv">${fmtGal(p.agingGal)}</span> → ~${p.bottles} btl</td>
+    </tr>`);
+  });
+  if(rows.length===0) return '';
+  return `<div class="panel" style="margin-top:14px">
+    <div class="ph"><div class="pt">🍷 Single Variety Vessels — Consolidated</div></div>
+    <div class="info-note mb8" style="font-size:11px">💡 When the same grape appears in multiple blends, the excess SV wine shares one aging vessel. <b>Shared</b> = grape in 2+ blends. Tank-split varieties are grouped by yeast type. Assign a vessel from your arsenal here — it will reflect in the flowchart.</div>
+    <table class="tbl"><thead><tr>
+      <th>Grape</th><th>Yeast</th><th>Total SV Volume</th><th>Sourced From</th><th>Aging Vessel</th><th>Yield</th>
+    </tr></thead><tbody>${rows.join('')}</tbody></table>
+  </div>`;
+}
+
+// ════════════════════════════════════════════
+// TRACKING — per-varietal batch log
+// ════════════════════════════════════════════
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function daysSince(dateStr){
+  if(!dateStr) return null;
+  const d=Math.floor((Date.now()-new Date(dateStr+'T00:00').getTime())/86400000);
+  return d<0?0:d;
+}
+const TRACK_STAGE_LABELS={primary:'🪣 Primary',secondary:'⚗️ Secondary',ml:'🦠 ML Ferment',assembled:'🍷 Assembled',aging:'🛢 Aging',bottled:'🍾 Bottled'};
+// Common cellar additives, grouped — used to populate the additions dropdown
+const ADDITIVE_GROUPS=[
+  ['Yeast nutrients',['Fermaid O','Fermaid K','Go-Ferm Protect','Go-Ferm','DAP']],
+  ['Enzymes',['Lallzyme EX','Lallzyme EX-V','Lallzyme']],
+  ['Tannins & color',['Opti-Red','Booster Rouge','FT Rouge','Tannin FT','Oak tannin']],
+  ['Acid / pH',['Tartaric Acid','Malic Acid','Potassium Bicarbonate','Calcium Carbonate']],
+  ['ML & bacteria',['ML culture (VP41)','ML culture (CH16)','ML nutrient (Opti-Malo)','Acti-ML']],
+  ['SO₂ & stability',['Potassium Metabisulfite (KMS)','SO₂ solution','Lysozyme','Potassium Sorbate']],
+  ['Fining',['Bentonite','Egg white','Isinglass','Gelatin']],
+];
+const ADDITIVE_UNITS=['g','g/gal','g/L','mg/L (ppm)','mL','mL/gal','tsp','lb','oz'];
+// Mechanical cellar operations, grouped by the stage they usually belong to
+const PROCESS_GROUPS=[
+  ['Crush day',['Crush / Destem','Cold soak','Must adjustment']],
+  ['Primary',['Punch-down (cap)','Pump-over','Délestage (rack & return)','Add water/adjust']],
+  ['Press',['Press','Free-run drain','Press-run separation']],
+  ['Racking',['Rack off gross lees','Rack off fine lees','Transfer vessel','Top-up']],
+  ['Aging & lees',['Stir lees (bâtonnage)','Clearing / settling','Cold stabilize']],
+  ['Finishing',['Fining','Filter','Blend','Bottle']],
+];
+
+// Expected volume at each stage, forward from the batch's primary must
+function stageVolumes(mustGal){
+  const sec=mustGal*LOSS.pToS, age=sec*LOSS.sToA, bot=age*LOSS.aToB;
+  return {primary:mustGal, secondary:sec, ml:sec, aging:age, bottled:bot};
+}
+
+// Trackable batches = deduplicated grape+yeast fermentation lines (plus rosé bleeds)
+function getTrackingLines(){
+  const map=new Map();
+  const add=(key,grapeId,yeastId,isRose,mustGal,wineName)=>{
+    if(!map.has(key)) map.set(key,{key,grapeId,yeastId,isRose,mustGal:0,wines:new Set()});
+    const l=map.get(key); l.mustGal+=mustGal||0; if(wineName) l.wines.add(wineName);
+  };
+  S.wines.filter(w=>w.active!==false).forEach(wine=>{
+    const calc=calcWine(wine); if(!calc) return;
+    const entries=wine.wineType==='single'
+      ?[{comp:wine,cc:calc.components[0],tankRes:calc.tankResults}]
+      :wine.components.map((c,i)=>({comp:c,cc:calc.components[i],tankRes:calc.components[i]?.tankResults}));
+    entries.forEach(({comp,cc,tankRes})=>{
+      if(!cc||!comp.grapeId||!isGrapeActive(comp.grapeId)) return;
+      if(comp.useTankSplit&&comp.tanks?.length>1&&tankRes){
+        comp.tanks.forEach((t,ti)=>{ const tr=tankRes[ti]; if(tr) add(comp.grapeId+'::'+(t.yeastId||'none'),comp.grapeId,t.yeastId,false,tr.mustGal,wine.name); });
+      } else {
+        const yId=comp.yeastId||comp.tanks?.[0]?.yeastId;
+        add(comp.grapeId+'::'+(yId||'none'),comp.grapeId,yId,false,cc.totalMustGal,wine.name);
+      }
+      if(cc.roseCalc&&cc.roseMustGal>0.05){
+        add(comp.grapeId+'::rose::'+(comp.roseYeastId||'none'),comp.grapeId,comp.roseYeastId,true,cc.roseMustGal,wine.name);
+      }
+    });
+  });
+  return [...map.values()];
+}
+function trackingRec(key){
+  if(!S.tracking) S.tracking={};
+  if(!S.tracking[key]) S.tracking[key]={started:false,startDate:null,
+    ml:{enabled:false,timing:'post'},stage:null,stageDates:{},readings:[],additions:[],processes:[],agingTests:[]};
+  const r=S.tracking[key];
+  if(!r.ml) r.ml={enabled:false,timing:'post'};
+  if(!r.readings) r.readings=[];
+  if(!r.additions) r.additions=[];
+  if(!r.processes) r.processes=[];
+  if(!r.agingTests) r.agingTests=[];
+  if(!r.stageDates) r.stageDates={};
+  return r;
+}
+function trackStages(rec){
+  const st=['primary','secondary'];
+  if(rec.ml.enabled&&rec.ml.timing==='post') st.push('ml');
+  st.push('aging','bottled');
+  return st;
+}
+function trackLineName(line){
+  const g=grapeById(line.grapeId);
+  return (line.isRose?'🌹 ':'')+(g?.name||'?')+(line.isRose?' Rosé':'');
+}
+function trackStatusBadge(rec){
+  if(!rec.started) return '<span class="track-badge tb-idle">not started</span>';
+  if(rec.stage==='bottled') return '<span class="track-badge tb-done">🍾 bottled</span>';
+  const d=daysSince(rec.stageDates[rec.stage]);
+  return `<span class="track-badge tb-active">${TRACK_STAGE_LABELS[rec.stage]||rec.stage}${d!=null?' · day '+(d+1):''}</span>`;
+}
+
+// Stage-aware suggestions for readings, additions and next steps.
+// Uses the most recent reading where a value informs the advice.
+function trackRecommendations(rec,line){
+  const last=rec.readings.length?[...rec.readings].sort((a,b)=>a.date<b.date?-1:1).slice(-1)[0]:null;
+  const days=daysSince(rec.stageDates[rec.stage]);
+  const R=[],A=[],N=[]; // readings, additions, next steps
+  const grape=line?grapeById(line.grapeId):null;
+  switch(rec.stage){
+    case 'assembled':
+      R.push('Measure the assembled blend: pH, TA, free & molecular SO₂ (and Brix if any RS).');
+      A.push('Adjust SO₂ (KMS) for the blend pH; tannin/acid tweaks to integrate components.');
+      N.push('Let it marry a few days, then rack to the aging vessel and top up.');
+      break;
+    case 'primary':
+      R.push('Track Brix daily — expect ~1.5–2.5 °Bx drop/day once active.');
+      R.push('Check must temp with each cap management; watch pH & TA at set.');
+      if(last&&last.brix!=null){
+        if(last.brix>15) A.push('Early ferment: add Fermaid O / Go-Ferm-style nutrient if not yet dosed.');
+        else if(last.brix>5) A.push('~⅓ sugar depletion: time for the main Fermaid K / DAP nutrient addition.');
+        else A.push('Nutrient window closing — avoid DAP below ~5 °Bx.');
+        if(last.brix<=2) N.push('Near dry — plan to press and move to secondary.');
+      } else A.push('Log crush-day numbers, then add rehydration nutrient (Go-Ferm Protect) with yeast.');
+      A.push('Color/tannin (Opti-Red, FT Rouge, Booster Rouge) is best added early in primary.');
+      N.push('Punch-down or pump-over 1–3×/day; log each under Processes.');
+      if(days!=null&&days>=7&&(!last||last.brix>2)) N.push(`Day ${days+1} — if Brix has stalled, check temp/nutrient before it sticks.`);
+      break;
+    case 'secondary':
+      R.push('Confirm dryness: Brix at/below 0 (~ -1.5 to 0). Recheck pH & TA post-ferment.');
+      if(last&&last.brix!=null&&last.brix>1) N.push('Still sugar present — hold; ensure fermentation finishes before SO₂.');
+      if(rec.ml.enabled){
+        A.push(rec.ml.timing==='simultaneous'?'ML co-inoculated — keep SO₂ near zero until malic is gone.':'Ready to inoculate ML: add culture (VP41/CH16) + Opti-Malo nutrient.');
+        N.push('Hold SO₂ additions until ML is complete.');
+      } else {
+        A.push('No ML planned — once dry, add SO₂ (KMS) to ~0.5–0.6 ppm molecular for pH.');
+      }
+      N.push('Rack off gross lees; log under Processes.');
+      break;
+    case 'ml':
+      R.push('Track malic acid — target < 0.1–0.3 g/L to call ML complete.');
+      R.push('Keep SO₂ at 0 during ML; monitor pH (it will rise as malic converts).');
+      if(last&&last.malic!=null){
+        if(last.malic>0.3) N.push(`Malic ${last.malic} g/L — ML still active; keep warm (18–20 °C), wait.`);
+        else N.push(`Malic ${last.malic} g/L — ML essentially done. Add SO₂ and move to aging.`);
+      } else A.push('Add ML nutrient (Opti-Malo) if it stalls; keep temp 18–20 °C.');
+      N.push('When malic is stable and low, add first SO₂ and rack to aging.');
+      break;
+    case 'aging':
+      R.push('Check free & molecular SO₂ regularly; verify pH before each SO₂ top-up.');
+      if(last&&last.so2!=null&&last.so2<25) A.push(`SO₂ ${last.so2} ppm is low — add KMS to restore protective level.`);
+      else A.push('Maintain SO₂ (KMS); consider tartaric for pH or cold stabilization if needed.');
+      A.push('Oak/tannin adjustments and fining (bentonite, egg white) fit this stage.');
+      N.push('Top up headspace after each rack; schedule aging tests (panel below).');
+      N.push('Rack off fine lees periodically; stir lees (bâtonnage) if building texture.');
+      break;
+    case 'bottled':
+      R.push('Record final Brix, pH, TA, free SO₂ and (if applicable) malic at bottling.');
+      A.push('Confirm bottling SO₂; add sorbate only if residual sugar + no ML.');
+      N.push('Batch complete 🍾 — note bottle count and cellar location.');
+      break;
+  }
+  return {R,A,N};
+}
+
+function renderTrackingTab(){
+  const lines=getTrackingLines();
+  const blends=getBlendTargets();
+  if(S.ui.trackKey){
+    if(S.ui.trackKey.startsWith('blend::')){
+      const bt=blends.find(b=>b.key===S.ui.trackKey);
+      if(bt) return renderBlendLab(bt);
+      S.ui.trackKey=null;
+    } else {
+      const line=lines.find(l=>l.key===S.ui.trackKey);
+      if(line) return renderTrackingDetail(line);
+      S.ui.trackKey=null;
+    }
+  }
+  if(!lines.length) return '<div class="empty"><div class="empty-icon">🧪</div><p>Add active wine projects to track fermentations</p></div>';
+  const cards=lines.map(line=>{
+    const rec=trackingRec(line.key);
+    const yeast=yeastById(line.yeastId);
+    const lastR=rec.readings.length?rec.readings[rec.readings.length-1]:null;
+    return `<div class="track-card">
+      <div class="flex fai" style="justify-content:space-between">
+        <span class="track-card-title">${trackLineName(line)}</span>
+        ${trackStatusBadge(rec)}
+      </div>
+      <div class="txt-s txt-m" style="margin:4px 0 2px">${yeast?yeast.name+' · ':''}${fmtGal(line.mustGal)} must${rec.started&&rec.stage?' → '+fmtGal(stageVolumes(line.mustGal)[rec.stage])+' now':''}</div>
+      <div class="txt-s txt-m" style="font-size:11px">${[...line.wines].join(', ')}</div>
+      ${rec.started&&lastR?`<div class="txt-s" style="margin-top:6px;font-size:11px">Last: ${lastR.date}${lastR.brix!=null?' · '+lastR.brix+'°Bx':''}${lastR.ph!=null?' · pH '+lastR.ph:''}</div>`:''}
+      ${rec.started&&rec.stage==='aging'&&rec.agingTests.some(t=>!t.done&&t.date<todayStr())?'<div class="overdue" style="font-size:11px;margin-top:4px">⚠ aging test overdue</div>':''}
+      <div style="margin-top:9px">
+        ${rec.started
+          ?`<button class="btn btn-s btn-sm" onclick="S.ui.trackKey='${line.key}';render()">Open log →</button>`
+          :`<button class="btn btn-p btn-sm" onclick="startTracking('${line.key}')">▶ Start</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  const blendCards=blends.map(bt=>{
+    const rec=blendRec(bt.key);
+    const chosen=rec.trials.find(t=>t.chosen);
+    return `<div class="track-card" style="border-left:4px solid ${bt.wine.color==='red'?'#8B0000':'#C9A84C'}">
+      <div class="flex fai" style="justify-content:space-between">
+        <span class="track-card-title">${bt.wine.name}</span>
+        ${rec.started?'<span class="track-badge tb-active">assembling · '+(daysSince(rec.startDate)+1)+'d</span>':'<span class="track-badge tb-idle">not blended</span>'}
+      </div>
+      <div class="txt-s txt-m" style="margin:4px 0 2px">Blend · ${bt.comps.length} varieties · target ${fmtGal(bt.blendSecNeeded)} → ~${bt.bottles} btl</div>
+      <div class="txt-s txt-m" style="font-size:11px">${bt.comps.map(c=>c.name+' '+(c.ratio||0).toFixed(0)+'%').join(' · ')}</div>
+      ${rec.trials.length?`<div class="txt-s" style="font-size:11px;margin-top:5px">🧪 ${rec.trials.length} trial${rec.trials.length>1?'s':''}${chosen?' · chosen: <b>'+chosen.name+'</b>':''}</div>`:''}
+      <div style="margin-top:9px"><button class="btn ${rec.started||rec.trials.length?'btn-s':'btn-p'} btn-sm" onclick="S.ui.trackKey='${bt.key}';render()">🔬 Blend Lab →</button></div>
+    </div>`;
+  }).join('');
+
+  return `<div class="panel">
+    <div class="ph"><div class="pt">🧪 Varietal Tracking</div></div>
+    <div class="info-note mb8">Each card is one fermentation batch (grape + yeast, united across projects — tank splits by yeast, rosé bleeds tracked separately). Hit <b>▶ Start</b> on crush day to begin the step-by-step log.</div>
+    <div class="track-grid">${cards}</div>
+    ${blends.length?`<div class="ph" style="margin-top:16px"><div class="pt">🔬 Blend Assembly & Lab</div></div>
+    <div class="info-note mb8">Each blend can be assembled from its varietal batches. Open the <b>Blend Lab</b> to bench-test proportions with taste notes before you commit.</div>
+    <div class="track-grid">${blendCards}</div>`:''}
+  </div>`;
+}
+
+function renderBlendLab(target){
+  const {wine,comps,blendSecNeeded,agingGal,bottles}=target;
+  const rec=blendRec(target.key);
+  const bench=rec.benchMl||1000;
+  const wColor=wine.color==='red'?'#8B0000':'#C9A84C';
+
+  const trialCard=(t)=>{
+    const parts=comps.map(c=>t.pct[c.idx]||0);
+    const sum=parts.reduce((s,v)=>s+v,0)||1;
+    const rows=comps.map((c,i)=>{
+      const frac=(t.pct[c.idx]||0)/sum;
+      const gal=blendSecNeeded*frac, ml=bench*frac, left=c.availSec-gal;
+      const short=left<-0.05;
+      return `<tr>
+        <td class="txt-b">${c.name}</td>
+        <td><input class="fc trk-num" type="number" step="0.5" min="0" value="${t.pct[c.idx]||0}"
+          onchange="updateTrialPct('${target.key}','${t.id}',${c.idx},this.value)"></td>
+        <td>${(frac*100).toFixed(1)}%</td>
+        <td>${fmtGal(gal)}</td>
+        <td>${Math.round(ml)} mL</td>
+        <td>${fmtGal(c.availSec)}</td>
+        <td class="${short?'overdue':''}">${short?'⚠ short '+fmtGal(-left):fmtGal(left)+' left'}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="track-card" style="margin-bottom:12px;${t.chosen?'border:2px solid '+wColor:''}">
+      <div class="flex fai gap8" style="justify-content:space-between;margin-bottom:8px">
+        <input class="fc" style="max-width:200px;font-weight:bold" value="${t.name}" onchange="updateTrialName('${target.key}','${t.id}',this.value)">
+        <div class="flex gap6 fai">
+          <label class="tog-wrap" style="margin:0"><input type="radio" name="chosen-${target.key}" ${t.chosen?'checked':''} onchange="chooseTrial('${target.key}','${t.id}')"><span class="lbl" style="margin:0">Chosen</span></label>
+          <button class="btn btn-d btn-xs" onclick="delTrial('${target.key}','${t.id}')">✕</button>
+        </div>
+      </div>
+      <table class="tbl"><thead><tr><th>Variety</th><th>Parts</th><th>%</th><th>Full-scale</th><th>Bench (${bench}mL)</th><th>Available</th><th>Remaining</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="border-top:2px solid var(--border);font-weight:bold">
+        <td>Total</td><td>${sum.toFixed(1)}</td><td>100%</td><td>${fmtGal(blendSecNeeded)}</td><td>${bench} mL</td><td colspan="2"></td>
+      </tr></tfoot></table>
+      <div class="fg mt8"><label class="lbl">👅 Taste notes & adjustments</label>
+        <textarea class="fc" rows="2" style="resize:vertical" placeholder="aroma, structure, balance — what to add more/less of…"
+          onchange="updateTrialNotes('${target.key}','${t.id}',this.value)">${t.notes||''}</textarea></div>
+    </div>`;
+  };
+
+  return `<div class="panel">
+    <div class="ph">
+      <div>
+        <div class="pt">🔬 ${wine.name} — Blend Lab</div>
+        <div class="txt-s txt-m mt4">Target ${fmtGal(blendSecNeeded)} secondary → ${fmtGal(agingGal)} aging → ~${bottles} bottles${rec.startDate?` · assembled ${rec.startDate}`:''}</div>
+      </div>
+      <div class="flex gap8">
+        ${rec.started?`<button class="btn btn-d btn-sm" onclick="cancelBlend('${target.key}')">✕ Reset</button>`:''}
+        <button class="btn btn-s btn-sm" onclick="S.ui.trackKey=null;render()">← All batches</button>
+      </div>
+    </div>
+
+    <div class="sdiv">🍇 Component Availability</div>
+    <table class="tbl"><thead><tr><th>Variety</th><th>Default ratio</th><th>Available secondary</th><th>Needed at ratio</th><th>Status</th></tr></thead>
+    <tbody>${comps.map(c=>`<tr>
+      <td class="txt-b">${c.name}</td><td>${(c.ratio||0).toFixed(0)}%</td>
+      <td>${fmtGal(c.availSec)}</td><td>${fmtGal(c.blendGal)}</td>
+      <td>${c.shortfall>0.05?`<span class="warn">⚠ short ${fmtGal(c.shortfall)}</span>`:'<span class="ok">✔</span>'}</td>
+    </tr>`).join('')}</tbody></table>
+
+    <div class="sdiv">🧪 Bench Trials — Proportion Testing</div>
+    <div class="flex fai gap12 mb8" style="flex-wrap:wrap">
+      <button class="btn btn-p btn-sm" onclick="addTrial('${target.key}')">+ Add trial</button>
+      <label class="lbl" style="margin:0">Bench sample size:
+        <input class="fc trk-num" type="number" step="50" value="${bench}" style="width:90px;display:inline-block;margin-left:6px" onchange="setBenchMl('${target.key}',this.value)"> mL</label>
+      ${!rec.started?`<button class="btn btn-p btn-sm" onclick="startBlend('${target.key}')" title="Record blend assembly date">▶ Start blend assembly</button>`:''}
+    </div>
+    <div class="info-note mb8" style="font-size:11px">Set relative <b>parts</b> per variety — they normalize to %. Full-scale shows gallons at your target volume; Bench shows mL for a tasting sample. Mark the winner <b>Chosen</b>.</div>
+    ${rec.trials.length?rec.trials.map(trialCard).join(''):'<div class="txt-s txt-m mb8">No trials yet — add one to start testing proportions (it seeds from your project ratios).</div>'}
+
+    ${(()=>{
+      const stages=blendStages(rec);
+      if(rec.started&&!stages.includes(rec.stage)) rec.stage='aging';
+      const curIdx=stages.indexOf(rec.stage);
+      const nextStage=curIdx>=0&&curIdx<stages.length-1?stages[curIdx+1]:null;
+      const stepper=trkStepperHTML(rec,stages,blendVolumes(target));
+      return `
+      <div class="sdiv">🍷 Assembly → Aging → Bottling</div>
+      <div class="flex fai gap12 mb8" style="flex-wrap:wrap">
+        <label class="tog-wrap"><input class="tog" type="checkbox" ${rec.ml&&rec.ml.enabled?'checked':''} onchange="setTrackML('${target.key}',this.checked)">
+          <span class="lbl" style="margin:0">Post-blend ML</span></label>
+        ${rec.ml&&rec.ml.enabled?`<select class="fc" style="width:auto;font-size:12px" onchange="setTrackMLTiming('${target.key}',this.value)">
+          <option value="post" ${rec.ml.timing!=='simultaneous'?'selected':''}>Separate ML step</option>
+          <option value="simultaneous" ${rec.ml.timing==='simultaneous'?'selected':''}>Concurrent with settling</option>
+        </select><span class="txt-s txt-m">malic readings enabled</span>`:''}
+      </div>
+      ${rec.started?`
+        <div class="stepper">${stepper}</div>
+        <div class="flex gap8 mb8" style="flex-wrap:wrap">
+          ${nextStage?`<button class="btn btn-p btn-sm" onclick="advanceStage('${target.key}')">Advance to ${TRACK_STAGE_LABELS[nextStage]} →</button>`:''}
+          ${curIdx>0?`<button class="btn btn-s btn-sm" onclick="undoStage('${target.key}')" title="Go back one step">↩ Back a step</button>`:''}
+        </div>
+        ${trkReadingsPanel(target.key,rec)}
+        ${trkAdditionsPanel(target.key,rec)}
+        ${trkProcessPanel(target.key,rec)}
+        ${trkAgingPanel(target.key,rec)}
+        ${trkRecsPanel(rec,null)}
+      `:`<div class="info-note mb8">When you assemble the blend, hit <b>▶ Start blend assembly</b> above to begin aging & bottling tracking.</div>`}`;
+    })()}
+  </div>`;
+}
+
+// ── Shared log panels (used by both varietal detail and blend lab) ──
+function trkReadingsPanel(key,rec){
+  const showMalic=rec.ml&&rec.ml.enabled;
+  const rows=[...rec.readings].sort((a,b)=>a.date<b.date?-1:1).map(r=>`
+    <tr>
+      <td style="white-space:nowrap">${r.date}</td>
+      <td>${TRACK_STAGE_LABELS[r.stage]?.replace(/^\S+ /,'')||r.stage||'—'}</td>
+      <td>${r.brix??'—'}</td><td>${r.ph??'—'}</td><td>${r.ta??'—'}</td><td>${r.so2??'—'}</td>
+      ${showMalic?`<td>${r.malic??'—'}</td>`:''}
+      <td style="font-size:11px;color:var(--muted)">${r.notes||''}</td>
+      <td><button class="btn btn-d btn-xs" onclick="delReading('${key}','${r.id}')">✕</button></td>
+    </tr>`).join('');
+  return `<div class="sdiv">📋 Readings</div>
+    ${rec.readings.length?`<table class="tbl"><thead><tr>
+      <th>Date</th><th>Stage</th><th>Brix</th><th>pH</th><th>TA g/L</th><th>SO₂ ppm</th>${showMalic?'<th>Malic g/L</th>':''}<th>Notes</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table>`:'<div class="txt-s txt-m mb8">No readings yet.</div>'}
+    <div class="trk-form">
+      <div class="fg"><label class="lbl">Date</label><input class="fc" type="date" id="trk-date" value="${todayStr()}"></div>
+      <div class="fg"><label class="lbl">Brix</label><input class="fc trk-num" type="number" step="0.1" id="trk-brix" placeholder="°Bx"></div>
+      <div class="fg"><label class="lbl">pH</label><input class="fc trk-num" type="number" step="0.01" id="trk-ph" placeholder="3.55"></div>
+      <div class="fg"><label class="lbl">TA</label><input class="fc trk-num" type="number" step="0.1" id="trk-ta" placeholder="g/L"></div>
+      <div class="fg"><label class="lbl">SO₂</label><input class="fc trk-num" type="number" step="1" id="trk-so2" placeholder="ppm"></div>
+      ${showMalic?'<div class="fg"><label class="lbl">Malic</label><input class="fc trk-num" type="number" step="0.05" id="trk-malic" placeholder="g/L"></div>':''}
+      <div class="fg" style="flex:1;min-width:140px"><label class="lbl">Notes</label><input class="fc" id="trk-notes" placeholder="temp, additions…"></div>
+      <button class="btn btn-p btn-sm" onclick="addReading('${key}')">+ Add reading</button>
+    </div>`;
+}
+function trkAdditionsPanel(key,rec){
+  const addOptions=`<option value="">— pick / type below —</option>`+ADDITIVE_GROUPS.map(([grp,items])=>
+    `<optgroup label="${grp}">${items.map(n=>`<option value="${n}">${n}</option>`).join('')}</optgroup>`).join('')
+    +`<option value="__custom">➕ Other (use text field)</option>`;
+  return `<div class="sdiv">🧫 Additions & Chemistry</div>
+    <div class="info-note mb8" style="font-size:11px">Log nutrients, enzymes, tannins, acid, ML cultures, SO₂ and fining agents with dose and stage.</div>
+    ${rec.additions.length?`<table class="tbl"><thead><tr>
+      <th>Date</th><th>Stage</th><th>Product</th><th>Dose</th><th>Notes</th><th></th>
+    </tr></thead><tbody>${[...rec.additions].sort((a,b)=>a.date<b.date?-1:1).map(a=>`
+      <tr>
+        <td style="white-space:nowrap">${a.date}</td>
+        <td>${TRACK_STAGE_LABELS[a.stage]?.replace(/^\S+ /,'')||a.stage||'—'}</td>
+        <td class="txt-b">${a.product}</td>
+        <td style="white-space:nowrap">${a.amount!=null?a.amount+(a.unit?' '+a.unit:''):'—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${a.notes||''}</td>
+        <td><button class="btn btn-d btn-xs" onclick="delAddition('${key}','${a.id}')">✕</button></td>
+      </tr>`).join('')}
+    </tbody></table>`:'<div class="txt-s txt-m mb8">No additions logged yet.</div>'}
+    <div class="trk-form">
+      <div class="fg"><label class="lbl">Date</label><input class="fc" type="date" id="add-date" value="${todayStr()}"></div>
+      <div class="fg" style="min-width:150px"><label class="lbl">Product</label>
+        <select class="fc" id="add-select" onchange="onAddSelect()">${addOptions}</select></div>
+      <div class="fg" style="min-width:130px"><label class="lbl">Or type product</label><input class="fc" id="add-custom" placeholder="custom product"></div>
+      <div class="fg"><label class="lbl">Amount</label><input class="fc trk-num" type="number" step="0.01" id="add-amount" placeholder="dose"></div>
+      <div class="fg"><label class="lbl">Unit</label><select class="fc" id="add-unit" style="width:auto">${ADDITIVE_UNITS.map(u=>`<option value="${u}">${u}</option>`).join('')}</select></div>
+      <div class="fg" style="flex:1;min-width:120px"><label class="lbl">Notes</label><input class="fc" id="add-notes" placeholder="target, reason…"></div>
+      <button class="btn btn-p btn-sm" onclick="addAddition('${key}')">+ Add</button>
+    </div>`;
+}
+function trkProcessPanel(key,rec){
+  const procOptions=`<option value="">— pick / type below —</option>`+PROCESS_GROUPS.map(([grp,items])=>
+    `<optgroup label="${grp}">${items.map(n=>`<option value="${n}">${n}</option>`).join('')}</optgroup>`).join('')
+    +`<option value="__custom">➕ Other (use text field)</option>`;
+  return `<div class="sdiv">🔧 Mechanical Processes</div>
+    <div class="info-note mb8" style="font-size:11px">Log physical operations — crush, cap management, press, racking, clearing, fining, filtering, bottling.</div>
+    ${rec.processes.length?`<table class="tbl"><thead><tr>
+      <th>Date</th><th>Stage</th><th>Operation</th><th>Notes</th><th></th>
+    </tr></thead><tbody>${[...rec.processes].sort((a,b)=>a.date<b.date?-1:1).map(p=>`
+      <tr>
+        <td style="white-space:nowrap">${p.date}</td>
+        <td>${TRACK_STAGE_LABELS[p.stage]?.replace(/^\S+ /,'')||p.stage||'—'}</td>
+        <td class="txt-b">${p.op}</td>
+        <td style="font-size:11px;color:var(--muted)">${p.notes||''}</td>
+        <td><button class="btn btn-d btn-xs" onclick="delProcess('${key}','${p.id}')">✕</button></td>
+      </tr>`).join('')}
+    </tbody></table>`:'<div class="txt-s txt-m mb8">No operations logged yet.</div>'}
+    <div class="trk-form">
+      <div class="fg"><label class="lbl">Date</label><input class="fc" type="date" id="proc-date" value="${todayStr()}"></div>
+      <div class="fg" style="min-width:160px"><label class="lbl">Operation</label>
+        <select class="fc" id="proc-select" onchange="onProcSelect()">${procOptions}</select></div>
+      <div class="fg" style="min-width:140px"><label class="lbl">Or type operation</label><input class="fc" id="proc-custom" placeholder="custom operation"></div>
+      <div class="fg" style="flex:1;min-width:130px"><label class="lbl">Notes</label><input class="fc" id="proc-notes" placeholder="vessel, volume moved…"></div>
+      <button class="btn btn-p btn-sm" onclick="addProcess('${key}')">+ Add</button>
+    </div>`;
+}
+function trkAgingPanel(key,rec){
+  return `<div class="sdiv">🛢 Aging Test Schedule</div>
+    <div class="info-note mb8" style="font-size:11px">Plan testing dates during aging — overdue tests are flagged here and on the batch card.</div>
+    ${rec.agingTests.length?`<table class="tbl"><thead><tr><th></th><th>Planned date</th><th>Note</th><th></th></tr></thead><tbody>
+      ${[...rec.agingTests].sort((a,b)=>a.date<b.date?-1:1).map(t=>{
+        const overdue=!t.done&&t.date<todayStr();
+        return `<tr style="${t.done?'opacity:.55':''}">
+          <td><input type="checkbox" ${t.done?'checked':''} onchange="toggleAgingTest('${key}','${t.id}')"></td>
+          <td class="${overdue?'overdue':''}">${t.date}${overdue?' ⚠ overdue':''}</td>
+          <td style="font-size:12px">${t.note||''}</td>
+          <td><button class="btn btn-d btn-xs" onclick="delAgingTest('${key}','${t.id}')">✕</button></td>
+        </tr>`}).join('')}
+    </tbody></table>`:'<div class="txt-s txt-m mb8">No tests planned yet.</div>'}
+    <div class="trk-form">
+      <div class="fg"><label class="lbl">Test date</label><input class="fc" type="date" id="trk-test-date" value="${todayStr()}"></div>
+      <div class="fg" style="flex:1"><label class="lbl">Note</label><input class="fc" id="trk-test-note" placeholder="e.g. SO2 check, topping, taste"></div>
+      <button class="btn btn-p btn-sm" onclick="addAgingTest('${key}')">+ Add test</button>
+    </div>`;
+}
+function trkRecsPanel(rec,line){
+  const r2=trackRecommendations(rec,line);
+  const sec=(txt,items,color,icon)=>items.length?`
+    <div style="flex:1;min-width:210px">
+      <div style="font-size:12px;font-weight:bold;color:${color};margin-bottom:4px">${icon} ${txt}</div>
+      <ul style="margin:0;padding-left:16px;font-size:12px;color:#4a4a4a;line-height:1.5">${items.map(t=>`<li>${t}</li>`).join('')}</ul>
+    </div>`:'';
+  return (r2.R.length||r2.A.length||r2.N.length)?`
+    <div class="calc-box" style="margin-top:12px;background:#f7f4ec">
+      <div class="calc-title">💡 Recommendations — ${TRACK_STAGE_LABELS[rec.stage]||rec.stage}</div>
+      <div class="info-note mb8" style="font-size:11px">General guidance for this stage${rec.readings.length?', tuned to your latest reading':''}. Adjust to your own protocol and lab results.</div>
+      <div class="flex gap12" style="flex-wrap:wrap">
+        ${sec('Readings to take',r2.R,'#2C7BB6','📋')}
+        ${sec('Additions to consider',r2.A,'#8B0000','🧫')}
+        ${sec('Next steps',r2.N,'#1e8449','➡️')}
+      </div>
+    </div>`:'';
+}
+function trkStepperHTML(rec,stages,vols){
+  const curIdx=stages.indexOf(rec.stage);
+  return stages.map((st,i)=>{
+    const cls=i<curIdx?'done':i===curIdx?'current':'';
+    const date=rec.stageDates[st];
+    const days=(i===curIdx&&date)?` · day ${daysSince(date)+1}`:'';
+    const v=vols?vols[st]:null;
+    const volLbl=v==null?'':(st==='bottled'?`~${Math.round(v*BPGAL)} btl`:`~${fmtGal(v)}`);
+    const coMl=(st==='primary'&&rec.ml&&rec.ml.enabled&&rec.ml.timing==='simultaneous')?'<span class="step-date">🦠 co-inoc ML</span>':'';
+    return `<div class="step ${cls}">${TRACK_STAGE_LABELS[st]}${days}${volLbl?`<span class="step-date">📦 ${volLbl}</span>`:''}${date?`<span class="step-date">${date}</span>`:''}${coMl}</div>`;
+  }).join('');
+}
+
+function renderTrackingDetail(line){
+  const rec=trackingRec(line.key);
+  const stages=trackStages(rec);
+  if(rec.started&&!stages.includes(rec.stage)) rec.stage='secondary';
+  const yeast=yeastById(line.yeastId);
+  const curIdx=stages.indexOf(rec.stage);
+  const stepper=trkStepperHTML(rec,stages,stageVolumes(line.mustGal));
+  const nextStage=curIdx>=0&&curIdx<stages.length-1?stages[curIdx+1]:null;
+  const additionsPanel=trkAdditionsPanel(line.key,rec);
+  const processPanel=trkProcessPanel(line.key,rec);
+  const recsPanel=trkRecsPanel(rec,line);
+  const agingPanel=trkAgingPanel(line.key,rec);
+
+  return `<div class="panel">
+    <div class="ph">
+      <div>
+        <div class="pt">${trackLineName(line)} <span style="font-weight:normal;font-size:13px;color:var(--muted)">${yeast?yeast.name+' · ':''}${fmtGal(line.mustGal)} must</span></div>
+        <div class="txt-s txt-m mt4">${[...line.wines].join(', ')} ${rec.startDate?` · started ${rec.startDate} (day ${daysSince(rec.startDate)+1})`:''}</div>
+      </div>
+      <div class="flex gap8">
+        ${rec.started?`<button class="btn btn-d btn-sm" onclick="cancelTracking('${line.key}')" title="Reset this batch — clears all log data so you can start over">✕ Cancel / Reset</button>`:''}
+        <button class="btn btn-s btn-sm" onclick="S.ui.trackKey=null;render()">← All varietals</button>
+      </div>
+    </div>
+
+    ${(()=>{ const dist=lineDistribution(line);
+      if(dist.dests.length<=1) return '';
+      const blendDests=dist.dests.filter(d=>d.kind==='blend');
+      const other=dist.dests.filter(d=>d.kind!=='blend');
+      return `<div class="sdiv">📤 Where This Batch Splits</div>
+      <div class="info-note mb8" style="font-size:11px">This varietal's ${fmtGal(dist.totalSec)} of secondary is divided across ${blendDests.length} blend${blendDests.length===1?'':'s'}${other.length?' plus single-variety':''}.</div>
+      <table class="tbl"><thead><tr><th>Destination</th><th>Volume</th><th>Share</th></tr></thead><tbody>
+        ${dist.dests.sort((a,b)=>b.gal-a.gal).map(d=>`<tr>
+          <td class="txt-b" style="color:${d.kind==='blend'?'#8B0000':d.kind==='sv'?'#7B6A5A':d.kind==='rose'?'#A04060':'#2C7BB6'}">${d.name}</td>
+          <td>${fmtGal(d.gal)}</td>
+          <td>${dist.totalSec>0?((d.gal/dist.totalSec)*100).toFixed(0):0}%</td>
+        </tr>`).join('')}
+      </tbody><tfoot><tr style="border-top:2px solid var(--border);font-weight:bold">
+        <td>Total secondary</td><td>${fmtGal(dist.totalSec)}</td><td>100%</td></tr></tfoot></table>`;
+    })()}
+
+    <div class="sdiv">🦠 Malolactic Fermentation</div>
+    <div class="flex fai gap12 mb8" style="flex-wrap:wrap">
+      <label class="tog-wrap"><input class="tog" type="checkbox" ${rec.ml.enabled?'checked':''} onchange="setTrackML('${line.key}',this.checked)">
+        <span class="lbl" style="margin:0">ML fermentation</span></label>
+      ${rec.ml.enabled?`<select class="fc" style="width:auto;font-size:12px" onchange="setTrackMLTiming('${line.key}',this.value)">
+        <option value="simultaneous" ${rec.ml.timing==='simultaneous'?'selected':''}>Simultaneous (co-inoculated with alcoholic)</option>
+        <option value="post" ${rec.ml.timing==='post'?'selected':''}>Post-alcoholic (separate ML step)</option>
+      </select>
+      <span class="txt-s txt-m">malic acid readings enabled</span>`:''}
+    </div>
+
+    ${rec.started?`
+      <div class="stepper">${stepper}</div>
+      <div class="flex gap8 mb8" style="flex-wrap:wrap">
+        ${nextStage?`<button class="btn btn-p btn-sm" onclick="advanceStage('${line.key}')">Advance to ${TRACK_STAGE_LABELS[nextStage]} →</button>`:''}
+        ${curIdx>0?`<button class="btn btn-s btn-sm" onclick="undoStage('${line.key}')" title="Go back one step">↩ Back a step</button>`:''}
+      </div>
+
+      ${trkReadingsPanel(line.key,rec)}
+
+      ${additionsPanel}
+
+      ${processPanel}
+
+      ${(rec.stage==='aging'||rec.stage==='bottled'||rec.agingTests.length)?agingPanel:''}
+
+      ${recsPanel}
+    `:`
+      <div class="info-note mb8">Not started yet. Hit start on crush day — the log begins at 🪣 Primary and tracks days per stage.</div>
+      <button class="btn btn-p" onclick="startTracking('${line.key}')">▶ Start Tracking</button>
+    `}
+  </div>`;
+}
+
+function startTracking(key){
+  const rec=trackingRec(key);
+  rec.started=true; rec.startDate=todayStr(); rec.stage='primary';
+  rec.stageDates={primary:todayStr()};
+  S.ui.trackKey=key; render();
+}
+function cancelTracking(key){
+  if(!confirm('Reset this batch? All readings, additions, aging tests and stage history for this varietal will be cleared.')) return;
+  delete S.tracking[key]; // trackingRec() rebuilds a fresh idle record on next access
+  render();
+}
+function onAddSelect(){
+  const sel=document.getElementById('add-select'), custom=document.getElementById('add-custom');
+  if(!sel||!custom) return;
+  if(sel.value==='__custom'||sel.value===''){ custom.focus(); }
+  else { custom.value=''; }
+}
+function addAddition(key){
+  const rec=logRec(key); if(!rec) return;
+  const sel=document.getElementById('add-select')?.value;
+  const custom=document.getElementById('add-custom')?.value.trim();
+  const product=(sel&&sel!=='__custom')?sel:custom;
+  if(!product) return alert('Pick a product from the list or type one.');
+  const amtRaw=document.getElementById('add-amount')?.value;
+  rec.additions.push({id:uid(),date:document.getElementById('add-date')?.value||todayStr(),
+    stage:rec.stage,product,
+    amount:amtRaw===''||amtRaw==null?null:parseFloat(amtRaw),
+    unit:document.getElementById('add-unit')?.value||'',
+    notes:document.getElementById('add-notes')?.value.trim()||''});
+  render();
+}
+function delAddition(key,id){ const rec=logRec(key); if(!rec)return; rec.additions=rec.additions.filter(a=>a.id!==id); render(); }
+function onProcSelect(){
+  const sel=document.getElementById('proc-select'), custom=document.getElementById('proc-custom');
+  if(!sel||!custom) return;
+  if(sel.value==='__custom'||sel.value===''){ custom.focus(); } else { custom.value=''; }
+}
+function addProcess(key){
+  const rec=logRec(key); if(!rec) return;
+  const sel=document.getElementById('proc-select')?.value;
+  const custom=document.getElementById('proc-custom')?.value.trim();
+  const op=(sel&&sel!=='__custom')?sel:custom;
+  if(!op) return alert('Pick an operation from the list or type one.');
+  rec.processes.push({id:uid(),date:document.getElementById('proc-date')?.value||todayStr(),
+    stage:rec.stage,op,notes:document.getElementById('proc-notes')?.value.trim()||''});
+  render();
+}
+function delProcess(key,id){ const rec=logRec(key); if(!rec)return; rec.processes=rec.processes.filter(p=>p.id!==id); render(); }
+// Stage helpers work on either record type (blend keys start with 'blend::')
+function stageRecAndList(key){
+  if(key.startsWith('blend::')){ const rec=blendRec(key); return {rec,stages:blendStages(rec)}; }
+  const rec=trackingRec(key); return {rec,stages:trackStages(rec)};
+}
+function setTrackML(key,en){ const {rec}=stageRecAndList(key); rec.ml.enabled=en; render(); }
+function setTrackMLTiming(key,val){ const {rec}=stageRecAndList(key); rec.ml.timing=val; render(); }
+function advanceStage(key){
+  const {rec,stages}=stageRecAndList(key);
+  const i=stages.indexOf(rec.stage);
+  if(i<0||i>=stages.length-1) return;
+  rec.stage=stages[i+1];
+  if(!rec.stageDates[rec.stage]) rec.stageDates[rec.stage]=todayStr();
+  render();
+}
+function undoStage(key){
+  const {rec,stages}=stageRecAndList(key);
+  const i=stages.indexOf(rec.stage);
+  if(i<=0) return;
+  delete rec.stageDates[rec.stage];
+  rec.stage=stages[i-1];
+  render();
+}
+// Generic log accessor — works for both varietal and blend records
+function logRec(key){
+  const r=S.tracking&&S.tracking[key]; if(!r) return null;
+  if(!r.readings)r.readings=[]; if(!r.additions)r.additions=[];
+  if(!r.processes)r.processes=[]; if(!r.agingTests)r.agingTests=[];
+  if(!r.stageDates)r.stageDates={};
+  return r;
+}
+function addReading(key){
+  const rec=logRec(key); if(!rec) return;
+  const num=id=>{ const v=document.getElementById(id)?.value; return v===''||v==null?null:parseFloat(v); };
+  const date=document.getElementById('trk-date')?.value||todayStr();
+  rec.readings.push({id:uid(),date,stage:rec.stage,
+    brix:num('trk-brix'),ph:num('trk-ph'),ta:num('trk-ta'),so2:num('trk-so2'),
+    malic:(rec.ml&&rec.ml.enabled)?num('trk-malic'):null,
+    notes:document.getElementById('trk-notes')?.value.trim()||''});
+  render();
+}
+function delReading(key,id){ const rec=logRec(key); if(!rec)return; rec.readings=rec.readings.filter(r=>r.id!==id); render(); }
+function addAgingTest(key){
+  const rec=logRec(key); if(!rec) return;
+  const date=document.getElementById('trk-test-date')?.value; if(!date) return alert('Pick a test date.');
+  rec.agingTests.push({id:uid(),date,note:document.getElementById('trk-test-note')?.value.trim()||'',done:false});
+  render();
+}
+function toggleAgingTest(key,id){ const rec=logRec(key); if(!rec)return; const t=rec.agingTests.find(t=>t.id===id); if(t) t.done=!t.done; render(); }
+function delAgingTest(key,id){ const rec=logRec(key); if(!rec)return; rec.agingTests=rec.agingTests.filter(t=>t.id!==id); render(); }
+
+// ── Where a varietal batch's secondary volume goes (split across blends + SV + single wines)
+function lineDistribution(line){
+  const res={dests:[], totalSec:0};
+  const add=(name,gal,kind)=>{ if(gal<=0.05) return; res.dests.push({name,gal,kind}); };
+  const matchYeast=(yId)=>(yId||'none')===(line.yeastId||'none');
+  S.wines.filter(w=>w.active!==false).forEach(wine=>{
+    const calc=calcWine(wine); if(!calc) return;
+    if(wine.wineType==='single'){
+      const cc=calc.components[0]; if(!cc||wine.grapeId!==line.grapeId||!isGrapeActive(wine.grapeId)) return;
+      if(line.isRose){
+        if(cc.roseCalc&&matchYeast(wine.roseYeastId)){ res.totalSec+=cc.roseCalc.secondaryGal||0; add('🌹 '+wine.name+' rosé',cc.roseCalc.secondaryGal,'rose'); }
+        return;
+      }
+      const yId=wine.yeastId||wine.tanks?.[0]?.yeastId;
+      if(!matchYeast(yId)) return;
+      res.totalSec+=cc.compSecGal||0; add(wine.name+' (single)',cc.compSecGal,'single');
+    } else {
+      wine.components.forEach((comp,ci)=>{
+        const cc=calc.components[ci]; if(!cc||comp.grapeId!==line.grapeId||!isGrapeActive(comp.grapeId)) return;
+        if(line.isRose){
+          if(cc.roseCalc&&matchYeast(comp.roseYeastId)){ res.totalSec+=cc.roseCalc.secondaryGal||0; add('🌹 '+wine.name+' rosé',cc.roseCalc.secondaryGal,'rose'); }
+          return;
+        }
+        if(comp.useTankSplit&&comp.tanks?.length>1&&cc.tankResults){
+          comp.tanks.forEach((t,ti)=>{
+            if(!matchYeast(t.yeastId)) return;
+            const tr=cc.tankResults[ti]; if(!tr) return;
+            res.totalSec+=tr.secGal||0;
+            add('→ '+wine.name,tr.blendGal,'blend'); add('→ '+grapeById(line.grapeId)?.name+' SV',tr.svGal,'sv');
+          });
+        } else {
+          const yId=comp.yeastId||comp.tanks?.[0]?.yeastId;
+          if(!matchYeast(yId)) return;
+          res.totalSec+=cc.compSecGal||0;
+          add('→ '+wine.name,cc.blendFromComp,'blend'); add('→ '+grapeById(line.grapeId)?.name+' SV',cc.excessGal,'sv');
+        }
+      });
+    }
+  });
+  // merge same-name dests (e.g. SV appears per-tank)
+  const merged=new Map();
+  res.dests.forEach(d=>{ const e=merged.get(d.name)||{name:d.name,gal:0,kind:d.kind}; e.gal+=d.gal; merged.set(d.name,e); });
+  res.dests=[...merged.values()];
+  return res;
+}
+
+// ════════════════════════════════════════════
+// BLEND LAB — assembly start + bench-trial proportions
+// ════════════════════════════════════════════
+function getBlendTargets(){
+  return S.wines.filter(w=>w.wineType==='blend'&&w.active!==false).map(w=>{
+    const calc=calcWine(w);
+    const comps=(calc?.components||[]).map((cc,i)=>({
+      idx:i, grapeId:w.components[i].grapeId, name:cc.name,
+      ratio:cc.ratio||0, availSec:cc.compSecGal||0, blendGal:cc.blendPortionGal||0, shortfall:cc.shortfall||0}));
+    return {key:'blend::'+w.id, wine:w, calc, comps,
+      blendSecNeeded:calc?.blendSecNeeded||0, agingGal:calc?.agingGal||0, bottles:calc?.blendBottles||0};
+  });
+}
+function blendRec(key){
+  if(!S.tracking) S.tracking={};
+  if(!S.tracking[key]) S.tracking[key]={isBlend:true,started:false,startDate:null,benchMl:1000,trials:[],
+    ml:{enabled:false,timing:'post'},stage:null,stageDates:{},readings:[],additions:[],processes:[],agingTests:[]};
+  const r=S.tracking[key];
+  if(!r.trials) r.trials=[];
+  if(!r.benchMl) r.benchMl=1000;
+  if(!r.ml) r.ml={enabled:false,timing:'post'};
+  if(!r.stageDates) r.stageDates={};
+  if(!r.readings) r.readings=[];
+  if(!r.additions) r.additions=[];
+  if(!r.processes) r.processes=[];
+  if(!r.agingTests) r.agingTests=[];
+  return r;
+}
+function blendStages(rec){
+  const st=['assembled'];
+  if(rec.ml&&rec.ml.enabled) st.push('ml');
+  st.push('aging','bottled');
+  return st;
+}
+function blendVolumes(target){
+  const sec=target.blendSecNeeded||0, age=target.agingGal||0, bot=age*LOSS.aToB;
+  return {assembled:sec, ml:sec, aging:age, bottled:bot};
+}
+function newTrialFrom(target){
+  const pct={};
+  target.comps.forEach(c=>{ pct[c.idx]=+(c.ratio||0).toFixed(1); });
+  return {id:uid(),name:'Trial '+(blendRec(target.key).trials.length+1),pct,notes:'',chosen:false};
+}
+function startBlend(key){ const r=blendRec(key); r.started=true; r.startDate=todayStr(); r.stage='assembled'; r.stageDates={assembled:todayStr()}; S.ui.trackKey=key; render(); }
+function cancelBlend(key){
+  if(!confirm('Reset this blend? Assembly date and all bench trials will be cleared.')) return;
+  delete S.tracking[key]; render();
+}
+function addTrial(key){
+  const target=getBlendTargets().find(t=>t.key===key); if(!target) return;
+  blendRec(key).trials.push(newTrialFrom(target)); render();
+}
+function delTrial(key,id){ const r=blendRec(key); r.trials=r.trials.filter(t=>t.id!==id); render(); }
+function chooseTrial(key,id){ const r=blendRec(key); r.trials.forEach(t=>t.chosen=(t.id===id)); render(); }
+function updateTrialPct(key,id,idx,val){ const t=blendRec(key).trials.find(t=>t.id===id); if(t){ t.pct[idx]=Math.max(0,+val||0); render(); } }
+function updateTrialName(key,id,val){ const t=blendRec(key).trials.find(t=>t.id===id); if(t){ t.name=val; render(); } }
+function updateTrialNotes(key,id,val){ const t=blendRec(key).trials.find(t=>t.id===id); if(t){ t.notes=val; /* no re-render: keep focus */ saveToStorage(); } }
+function setBenchMl(key,val){ blendRec(key).benchMl=Math.max(1,+val||1000); render(); }
+
+// ════════════════════════════════════════════
+// SUPPLIES — yeast & chemical planning for the season
+// ════════════════════════════════════════════
+// Typical planning doses (g per gallon of must) — rough estimates for shopping
+const CHEM_ESTIMATES=[
+  ['Go-Ferm Protect','rehydration nutrient',0.30],
+  ['Fermaid O','organic yeast nutrient',0.50],
+  ['Fermaid K','complex yeast nutrient',0.50],
+  ['Potassium Metabisulfite (KMS)','≈50 ppm SO₂ addition',0.30],
+  ['Lallzyme EX','maceration enzyme',0.02],
+  ['Opti-Red','color/tannin (reds)',0.13],
+];
+function getYeastDemand(){
+  // group fermentation lines (grape+yeast) by yeast strain
+  const lines=getTrackingLines();
+  const byYeast=new Map();
+  lines.forEach(l=>{
+    const yId=l.yeastId||'__none';
+    if(!byYeast.has(yId)) byYeast.set(yId,{yeastId:l.yeastId||null,totalGal:0,varieties:[]});
+    const e=byYeast.get(yId);
+    e.totalGal+=l.mustGal||0;
+    e.varieties.push({name:trackLineName(l),gal:l.mustGal||0,wines:[...l.wines]});
+  });
+  return [...byYeast.values()].sort((a,b)=>b.totalGal-a.totalGal);
+}
+function getChemicalTotals(){
+  // sum all logged additions across every tracking record
+  const byProd=new Map();
+  Object.entries(S.tracking||{}).forEach(([key,rec])=>{
+    (rec.additions||[]).forEach(a=>{
+      const k=a.product+'||'+(a.unit||'');
+      if(!byProd.has(k)) byProd.set(k,{product:a.product,unit:a.unit||'',total:0,hasAmount:false,entries:0,batches:new Set()});
+      const e=byProd.get(k);
+      if(a.amount!=null){ e.total+=a.amount; e.hasAmount=true; }
+      e.entries++;
+      e.batches.add(trackKeyLabel(key));
+    });
+  });
+  return [...byProd.values()].sort((a,b)=>a.product<b.product?-1:1);
+}
+function trackKeyLabel(key){
+  if(key.startsWith('blend::')){ const w=wineById(key.slice(7)); return w?w.name:'blend'; }
+  const [gid,rest]=key.split('::'); const g=grapeById(gid);
+  return (g?g.name:'?')+(rest&&rest.startsWith('rose')?' rosé':'');
+}
+function setYeastRate(v){ S.ui.yeastRate=Math.max(0.1,+v||1); render(); }
+
+function renderSuppliesTab(){
+  const lines=getTrackingLines();
+  if(!lines.length) return '<div class="empty"><div class="empty-icon">🛒</div><p>Add active wine projects to plan supplies</p></div>';
+  const rate=S.ui.yeastRate||1;
+  const totalMust=lines.reduce((s,l)=>s+(l.mustGal||0),0);
+
+  // ── Yeast by strain (with per-variety breakdown) ──
+  const yd=getYeastDemand();
+  const yeastRows=yd.map(y=>{
+    const name=y.yeastId?(yeastById(y.yeastId)?.name||'?'):'⚠ Not selected';
+    const brand=y.yeastId?(yeastById(y.yeastId)?.brand||''):'';
+    const grams=y.totalGal*rate;
+    const pk5=Math.ceil(grams/5), pk8=Math.ceil(grams/8);
+    const varList=y.varieties.sort((a,b)=>b.gal-a.gal).map(v=>`${v.name} (${fmtGal(v.gal)})`).join(' · ');
+    return `<tr>
+      <td class="txt-b">${name}${brand?`<div class="txt-s txt-m" style="font-size:10px">${brand}</div>`:''}</td>
+      <td>${y.varieties.length}</td>
+      <td>${fmtGal(y.totalGal)}</td>
+      <td><b>${Math.round(grams)} g</b></td>
+      <td>${pk5}× 5g<div class="txt-s txt-m" style="font-size:10px">or ${pk8}× 8g</div></td>
+      <td style="font-size:11px;color:var(--muted)">${varList}</td>
+    </tr>`;
+  }).join('');
+  const totalYeastG=Math.round(yd.reduce((s,y)=>s+y.totalGal*rate,0));
+
+  // ── Chemicals logged in Tracking ──
+  const chem=getChemicalTotals();
+  const chemRows=chem.length?chem.map(c=>`<tr>
+      <td class="txt-b">${c.product}</td>
+      <td>${c.hasAmount?`<b>${+c.total.toFixed(2)} ${c.unit}</b>`:'<span class="txt-m">logged, no dose</span>'}</td>
+      <td>${c.entries}</td>
+      <td style="font-size:11px;color:var(--muted)">${[...c.batches].join(', ')}</td>
+    </tr>`).join(''):'';
+
+  // ── Estimated chemical shopping list (typical doses × total must) ──
+  const estRows=CHEM_ESTIMATES.map(([prod,desc,dose])=>{
+    const g=totalMust*dose;
+    return `<tr>
+      <td class="txt-b">${prod}<div class="txt-s txt-m" style="font-size:10px">${desc}</div></td>
+      <td>${dose} g/gal</td>
+      <td><b>${Math.round(g)} g</b></td>
+    </tr>`;
+  }).join('');
+
+  return `<div>
+    <div class="panel">
+      <div class="ph"><div class="pt">🛒 Season Supplies — Purchase Planning</div></div>
+      <div class="info-note mb8">Totals pulled from your active <b>Projects</b> (yeast + gallons) and logged <b>Tracking</b> additions. Use this to buy yeast and chemicals before crush. Total must this season: <b>${fmtGal(totalMust)}</b>.</div>
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <div class="ph"><div class="pt">🧫 Yeast Needed by Strain</div>
+        <label class="lbl" style="margin:0">Dose rate:
+          <input class="fc trk-num" type="number" step="0.1" min="0.1" value="${rate}" style="width:74px;display:inline-block;margin:0 6px" onchange="setYeastRate(this.value)">g/gal</label>
+      </div>
+      <table class="tbl"><thead><tr>
+        <th>Yeast</th><th>Varieties</th><th>Must volume</th><th>Grams needed</th><th>Packets</th><th>Used for</th>
+      </tr></thead><tbody>${yeastRows}</tbody>
+      <tfoot><tr style="border-top:2px solid var(--border);font-weight:bold">
+        <td>Total</td><td>${yd.reduce((s,y)=>s+y.varieties.length,0)}</td><td>${fmtGal(totalMust)}</td><td>${totalYeastG} g</td><td colspan="2"></td>
+      </tr></tfoot></table>
+      <div class="info-note mt8" style="font-size:11px">💡 Default ${rate} g/gal ≈ standard rehydrated inoculation (~25 g/hL). Adjust the rate to match your yeast's directions. ${yd.some(y=>!y.yeastId)?'<b style="color:#c0392b">⚠ Some varieties have no yeast selected</b> — assign yeasts in Wine Projects to complete the plan.':''}</div>
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <div class="ph"><div class="pt">🧪 Chemicals Logged in Tracking</div></div>
+      ${chem.length?`<div class="info-note mb8" style="font-size:11px">Actual additions you've recorded across all batches — your running shopping list.</div>
+      <table class="tbl"><thead><tr><th>Product</th><th>Total logged</th><th>Entries</th><th>Batches</th></tr></thead><tbody>${chemRows}</tbody></table>`
+      :'<div class="txt-s txt-m">No additions logged yet. As you record additions in Tracking, they total here automatically.</div>'}
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <div class="ph"><div class="pt">📋 Estimated Chemical Prep (typical doses)</div></div>
+      <div class="info-note mb8" style="font-size:11px">Rough planning estimates at typical doses × your ${fmtGal(totalMust)} of must — buy a little extra. Actual needs depend on your protocol, pH, and lab results.</div>
+      <table class="tbl"><thead><tr><th>Product</th><th>Typical dose</th><th>Est. for season</th></tr></thead><tbody>${estRows}</tbody></table>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════
+// FLOWCHART
+// ════════════════════════════════════════════
+function renderFlowchartTab(){
+  return `<div>
+    <div class="panel" style="margin-bottom:10px">
+      <div class="pt mb8">📊 Winemaking Process Flowchart</div>
+      <div class="fc-legend">
+        <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#4A4A6A"></div>Primary</div>
+        <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#3A5A7A"></div>Secondary</div>
+        <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#5D8A5E"></div>Oak Aging</div>
+        <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#2C7BB6"></div>Inert Aging</div>
+        <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#7B6A5A"></div>Single Variety</div>
+        <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#D4798A"></div>Rosé</div>
+        <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#2C3E50"></div>Bottles</div>
+      </div>
+      <div class="flex fai gap8" style="margin-top:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:#A08A6A;font-style:italic;flex:1;min-width:180px">💡 Click a stage label to collapse a step. Use zoom to fit the chart to your screen.</span>
+        <div class="flex fai gap4" style="flex-shrink:0">
+          <button class="btn btn-s btn-sm" onclick="fcZoom(-1)" title="Zoom out">➖</button>
+          <span style="font-size:12px;min-width:44px;text-align:center;font-weight:bold">${Math.round((S.ui.fcZoom||1)*100)}%</span>
+          <button class="btn btn-s btn-sm" onclick="fcZoom(1)" title="Zoom in">➕</button>
+          <button class="btn btn-s btn-sm" onclick="fcZoomReset()" title="Reset to 100%">⟲</button>
+          <button class="btn btn-s btn-sm" onclick="fcZoomFit()" title="Fit width to screen">⤢ Fit</button>
+        </div>
+      </div>
+    </div>
+    <div id="fc-scroll" style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px;box-shadow:var(--shadow);overflow:auto;-webkit-overflow-scrolling:touch">${buildSVG()}</div>
+  </div>`;
+}
+
+function toggleFcStage(k){
+  if(!S.ui.fcCollapsed) S.ui.fcCollapsed={};
+  S.ui.fcCollapsed[k]=!S.ui.fcCollapsed[k];
+  render();
+}
+const FC_ZOOMS=[0.3,0.4,0.5,0.6,0.75,0.9,1,1.25,1.5,2,2.5,3];
+function fcZoom(dir){
+  const z=S.ui.fcZoom||1;
+  let i=FC_ZOOMS.findIndex(v=>Math.abs(v-z)<0.001);
+  if(i<0){ i=FC_ZOOMS.reduce((best,v,idx)=>Math.abs(v-z)<Math.abs(FC_ZOOMS[best]-z)?idx:best,0); }
+  i=Math.max(0,Math.min(FC_ZOOMS.length-1,i+dir));
+  S.ui.fcZoom=FC_ZOOMS[i]; render();
+}
+function fcZoomReset(){ S.ui.fcZoom=1; render(); }
+function fcZoomFit(){
+  // scale so the chart's natural width fits the visible scroll area
+  const box=document.getElementById('fc-scroll'); const svg=box?box.querySelector('svg'):null;
+  if(!svg){ S.ui.fcZoom=1; render(); return; }
+  const vb=svg.getAttribute('viewBox'); const natW=vb?parseFloat(vb.split(' ')[2]):svg.width.baseVal.value;
+  const avail=box.clientWidth-28; // minus padding
+  if(natW>0&&avail>0) S.ui.fcZoom=Math.max(0.3,Math.min(3,+(avail/natW).toFixed(2)));
+  render();
+}
+function toggleComp(wid,i){
+  if(!S.ui.compCollapsed) S.ui.compCollapsed={};
+  const k=wid+':'+i;
+  S.ui.compCollapsed[k]=!S.ui.compCollapsed[k];
+  render();
+}
+function toggleAllComps(wid){
+  const w=wineById(wid); if(!w) return;
+  if(!S.ui.compCollapsed) S.ui.compCollapsed={};
+  const anyOpen=w.components.some((c,i)=>!S.ui.compCollapsed[wid+':'+i]);
+  w.components.forEach((c,i)=>S.ui.compCollapsed[wid+':'+i]=anyOpen);
+  render();
+}
+
+function buildSVG(){
+  const wines=S.wines.filter(w=>w.active!==false);
+  if(!wines.length) return '<div class="empty"><div class="empty-icon">📊</div><p>Add (or activate) wine projects to see flowchart</p></div>';
+  const NW=155,NH=70,EXP_H=140,COL_H=34,PAD_LEFT=132,PAD_TOP=26,PAD_RIGHT=20;
+  const CW=170,RW=155,BW=185,LINE_GAP=26,GRAPE_GAP=48,PROJ_GAP=38,SV_COL_W=160;
+  const collapsed=S.ui.fcCollapsed||(S.ui.fcCollapsed={});
+  const vis=k=>k==='grape'||!collapsed[k];
+  const stH=k=>vis(k)?EXP_H:COL_H;
+  const rTop=(y0,k)=>y0+(stH(k)-NH)/2;
+  let els=[];
+
+  // ════════════════════════════════════════════
+  // PHASE 1 — Fermentation lines (deduplicated by grapeId + yeastId) across
+  // all ACTIVE wine projects. Components on inactive grapes are skipped.
+  // ════════════════════════════════════════════
+  const fermLines = new Map();
+  function getLine(grapeId,yeastId){
+    const key=grapeId+'::'+(yeastId||'none');
+    if(!fermLines.has(key)) fermLines.set(key,{key,grapeId,yeastId,usages:[],roseUsages:[]});
+    return fermLines.get(key);
+  }
+  wines.forEach(wine=>{
+    const calc=calcWine(wine);
+    if(!calc) return;
+    if(wine.wineType==='single'){
+      const cc=calc.components[0]; if(!cc||!wine.grapeId||!isGrapeActive(wine.grapeId)) return;
+      if(wine.useTankSplit&&wine.tanks?.length>1&&calc.tankResults){
+        wine.tanks.forEach((t,ti)=>{
+          const tr=calc.tankResults[ti]; if(!tr) return;
+          const line=getLine(wine.grapeId,t.yeastId);
+          line.usages.push({wineId:wine.id,compIdx:null,tankIdx:ti,mustGal:tr.mustGal,secGal:tr.secGal,
+            dest:{kind:'wine',wineId:wine.id,portionGal:tr.secGal}});
+        });
+      } else {
+        const yId=wine.yeastId||wine.tanks?.[0]?.yeastId;
+        const line=getLine(wine.grapeId,yId);
+        line.usages.push({wineId:wine.id,compIdx:null,tankIdx:null,mustGal:cc.totalMustGal,secGal:cc.compSecGal,
+          dest:{kind:'wine',wineId:wine.id,portionGal:cc.compSecGal}});
+        if(cc.roseCalc&&cc.roseMustGal>0.05) line.roseUsages.push({roseMustGal:cc.roseMustGal,roseAgingEquipmentId:wine.roseAgingEquipmentId});
+      }
+    } else {
+      wine.components.forEach((comp,ci)=>{
+        const cc=calc.components[ci]; if(!cc||!comp.grapeId||!isGrapeActive(comp.grapeId)) return;
+        if(comp.useTankSplit&&comp.tanks?.length>1&&cc.tankResults){
+          comp.tanks.forEach((t,ti)=>{
+            const tr=cc.tankResults[ti]; if(!tr) return;
+            const line=getLine(comp.grapeId,t.yeastId);
+            line.usages.push({wineId:wine.id,compIdx:ci,tankIdx:ti,mustGal:tr.mustGal,secGal:tr.secGal,
+              dest:{kind:'blend',wineId:wine.id,blendGal:tr.blendGal,svGal:tr.svGal,shortfall:0}});
+          });
+        } else {
+          const yId=comp.yeastId||comp.tanks?.[0]?.yeastId;
+          const line=getLine(comp.grapeId,yId);
+          line.usages.push({wineId:wine.id,compIdx:ci,tankIdx:null,mustGal:cc.totalMustGal,secGal:cc.compSecGal,
+            dest:{kind:'blend',wineId:wine.id,blendGal:cc.blendFromComp,svGal:cc.excessGal,shortfall:cc.shortfall}});
+          if(cc.roseCalc&&cc.roseMustGal>0.05) line.roseUsages.push({roseMustGal:cc.roseMustGal,roseAgingEquipmentId:comp.roseAgingEquipmentId});
+        }
+      });
+    }
+  });
+
+  fermLines.forEach(line=>{
+    line.totalMustGal=line.usages.reduce((s,u)=>s+(u.mustGal||0),0);
+    line.totalSecGal=line.usages.reduce((s,u)=>s+(u.secGal||0),0);
+    const blendMap=new Map();
+    line.usages.forEach(u=>{
+      if(u.dest.kind==='blend'){
+        const e=blendMap.get(u.dest.wineId)||{gal:0,shortfall:0};
+        e.gal+=u.dest.blendGal||0; e.shortfall+=u.dest.shortfall||0;
+        blendMap.set(u.dest.wineId,e);
+      }
+    });
+    line.blendDests=[...blendMap.entries()].map(([wineId,v])=>({wineId,gal:v.gal,shortfall:v.shortfall}));
+    line.wineDests=line.usages.filter(u=>u.dest.kind==='wine').map(u=>({wineId:u.dest.wineId,gal:u.dest.portionGal}));
+    if(line.roseUsages.length){
+      const totalRoseMust=line.roseUsages.reduce((s,r)=>s+(r.roseMustGal||0),0);
+      const first=line.roseUsages[0];
+      line.roseAgingEquipmentId=first.roseAgingEquipmentId;
+      const rAgeEq=byId(first.roseAgingEquipmentId);
+      line.roseCalc = totalRoseMust>0.05 ? calcRoseChain(totalRoseMust, rAgeEq?.volumeGal) : null;
+    }
+  });
+
+  const allocMap = calcGrapeAllocations();
+  const svPools = calcSVConsolidation();
+
+  // ════════════════════════════════════════════
+  // PHASE 2 — Layout.
+  // Top: fermentation lines grouped by grape.
+  // Section 1: single-varietal wines / SV pools / rosés, aligned under their lines.
+  // Section 2: blends, fed by orthogonal bus lanes (no criss-crossing curves).
+  // ════════════════════════════════════════════
+  const grapeOrder=[]; const grapeLines=new Map();
+  fermLines.forEach(line=>{
+    if(!grapeLines.has(line.grapeId)){ grapeLines.set(line.grapeId,[]); grapeOrder.push(line.grapeId); }
+    grapeLines.get(line.grapeId).push(line);
+  });
+  let curX=PAD_LEFT;
+  const grapeNodeInfo=[];
+  grapeOrder.forEach(grapeId=>{
+    const linesForGrape=grapeLines.get(grapeId);
+    const colInfos=[];
+    linesForGrape.forEach(line=>{
+      const hasRose=!!line.roseCalc;
+      const cx=curX+CW/2;
+      const roseCx=hasRose?curX+CW+RW/2:null;
+      line.cx=cx; line.roseCx=roseCx;
+      colInfos.push({line,cx,roseCx,hasRose});
+      curX+=CW+(hasRose?RW:0)+LINE_GAP;
+    });
+    curX+=GRAPE_GAP-LINE_GAP;
+    const xs=colInfos.map(c=>c.cx);
+    grapeNodeInfo.push({grapeId,nodeCx:xs.reduce((a,b)=>a+b,0)/(xs.length||1),cols:colInfos});
+  });
+  const varietalW=curX;
+
+  // Section 1 columns — aligned under source lines where possible
+  const svCols=[];
+  const seenSingles=new Set();
+  const orderedLines=[...fermLines.values()].sort((a,b)=>a.cx-b.cx);
+  orderedLines.forEach(line=>{
+    line.wineDests.forEach(d=>{
+      if(seenSingles.has(d.wineId)) return; seenSingles.add(d.wineId);
+      const wine=wineById(d.wineId); if(!wine) return;
+      svCols.push({kind:'single',wine,calc:calcWine(wine),w:CW,desired:line.cx});
+    });
+    const pool=svPools.get(line.key);
+    if(pool&&pool.totalExcessGal>0.05) svCols.push({kind:'sv',key:line.key,pool,w:SV_COL_W,desired:line.cx});
+    if(line.roseCalc) svCols.push({kind:'rose',line,w:RW,desired:line.roseCx||line.cx});
+  });
+  wines.forEach(w=>{ // single wines with no fermentation line (no grape / inactive grape)
+    if(w.wineType!=='single'||seenSingles.has(w.id)) return;
+    svCols.push({kind:'single',wine:w,calc:calcWine(w),w:CW,desired:PAD_LEFT+CW/2,orphan:true});
+  });
+  let sx=PAD_LEFT;
+  svCols.forEach(c=>{ c.cx=Math.max(c.desired,sx+c.w/2); sx=c.cx+c.w/2+PROJ_GAP; });
+  const svW=svCols.length?sx-PROJ_GAP:0;
+
+  // Section 2 columns — blends, placed near the average x of their sources
+  const blendCols=wines.filter(w=>w.wineType==='blend').map(w=>{
+    const srcs=orderedLines.filter(l=>l.blendDests.some(d=>d.wineId===w.id&&d.gal>0.05));
+    return {kind:'blend',wine:w,calc:calcWine(w),w:BW,srcLines:srcs,
+      desired:srcs.length?srcs.reduce((s,l)=>s+l.cx,0)/srcs.length:PAD_LEFT+BW/2};
+  }).sort((a,b)=>a.desired-b.desired);
+  let bxx=PAD_LEFT;
+  blendCols.forEach(c=>{ c.cx=Math.max(c.desired,bxx+c.w/2); bxx=c.cx+c.w/2+PROJ_GAP; });
+  const blendW=blendCols.length?bxx-PROJ_GAP:0;
+
+  const singleByWineId=new Map(svCols.filter(c=>c.kind==='single').map(c=>[c.wine.id,c]));
+  const svByKey=new Map(svCols.filter(c=>c.kind==='sv').map(c=>[c.key,c]));
+  const roseByLineKey=new Map(svCols.filter(c=>c.kind==='rose').map(c=>[c.line.key,c]));
+  const blendByWineId=new Map(blendCols.map(c=>[c.wine.id,c]));
+
+  const totalW=Math.max(varietalW,svW,blendW,PAD_LEFT+CW)+PAD_RIGHT;
+
+  // ── Vertical geometry ──
+  const hasSV=svCols.length>0, hasBlend=blendCols.length>0;
+  const yG=PAD_TOP, yP=yG+EXP_H, yS=yP+stH('primary'), yEndVar=yS+stH('secondary');
+  const DIV_H=84, LANE_GAP=13;
+  const yDiv1=yEndVar, cardTop1=yDiv1+30;
+  const yA1=yDiv1+DIV_H, yB1=yA1+stH('aging');
+  const cardBot1=yB1+stH('bottling')+4;
+  const svEnd=hasSV?cardBot1+14:yDiv1+18;
+  const lanesH=hasBlend?18:0;
+  const yDiv2=svEnd+lanesH, cardTop2=yDiv2+34;
+  const yA2=yDiv2+DIV_H-4, yB2=yA2+stH('aging');
+  const cardBot2=yB2+stH('bottling')+4;
+  const totalH=(hasBlend?cardBot2:(hasSV?cardBot1:yDiv1+30))+24;
+
+  // ── Section summaries for collapsed bars ──
+  let totMust=0,totSec=0;
+  fermLines.forEach(l=>{
+    totMust+=l.totalMustGal; totSec+=l.totalSecGal;
+    if(l.roseCalc){ totMust+=l.roseCalc.primaryGal||0; totSec+=l.roseCalc.secondaryGal||0; }
+  });
+  const svBtl=svCols.reduce((s,c)=>c.kind==='single'?s+(c.calc?.bottles||0):c.kind==='sv'?s+(c.pool.bottles||0):s+(c.line.roseCalc?.bottles||0),0);
+  const blBtl=blendCols.reduce((s,c)=>s+(c.calc?.blendBottles||0),0);
+  const summary={
+    primary:`${fermLines.size} fermentation${fermLines.size===1?'':'s'} · ${fmtGal(totMust)}`,
+    secondary:`${fermLines.size} vessel${fermLines.size===1?'':'s'} · ${fmtGal(totSec)}`,
+    aging1:`${svCols.length} vessel${svCols.length===1?'':'s'}`,
+    bottling1:`~${svBtl} bottles`,
+    aging2:`${blendCols.length} vessel${blendCols.length===1?'':'s'}`,
+    bottling2:`~${blBtl} bottles`
+  };
+
+  // ── Canvas & defs ──
+  els.push(`<defs>
+    <filter id="ds"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.18)"/></filter>
+    <marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#999"/></marker>
+    <marker id="arr-r" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#D4798A"/></marker>
+    <marker id="arr-b" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#2C7BB6"/></marker>
+    <marker id="arr-sv" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#7B6A5A"/></marker>
+    <marker id="arr-red" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8B0000"/></marker>
+    <marker id="arr-w" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#C9A84C"/></marker>
+  </defs>`);
+  els.push(`<rect width="${totalW}" height="${totalH}" fill="#FAF7F0"/>`);
+  els.push(`<rect x="0" y="${PAD_TOP}" width="${PAD_LEFT-5}" height="${totalH-PAD_TOP-16}" fill="rgba(245,236,215,0.6)"/>`);
+
+  function mkFor(color){ return color==='#D4798A'?'arr-r':color==='#2C7BB6'?'arr-b':color==='#7B6A5A'?'arr-sv':color==='#8B0000'?'arr-red':color==='#C9A84C'?'arr-w':'arr'; }
+  function node(cx,yTop,title,sub,color){
+    const x=cx-NW/2,t1=title.length>20?title.slice(0,19)+'…':title;
+    const s1=sub?(sub.length>24?sub.slice(0,23)+'…':sub):'';
+    els.push(`<rect x="${x}" y="${yTop}" width="${NW}" height="${NH}" rx="8" fill="${color}" filter="url(#ds)"/>`);
+    els.push(`<text x="${cx}" y="${yTop+28}" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff" font-family="Georgia">${t1}</text>`);
+    if(s1) els.push(`<text x="${cx}" y="${yTop+48}" text-anchor="middle" font-size="11" fill="rgba(255,255,255,.85)" font-family="Georgia">${s1}</text>`);
+  }
+  function arrLine(x1,y1,x2,y2,color='#999',dashed=false){
+    els.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2-5}" stroke="${color}" stroke-width="2" ${dashed?'stroke-dasharray="5,3"':''} marker-end="url(#${mkFor(color)})"/>`);
+  }
+  function hArrow(x1,y,x2,color,dashed=false){
+    els.push(`<line x1="${x1}" y1="${y}" x2="${x2-5}" y2="${y}" stroke="${color}" stroke-width="2" ${dashed?'stroke-dasharray="5,3"':''} marker-end="url(#${mkFor(color)})"/>`);
+  }
+  function eqNamesFor(line,field){
+    return [...new Set(line.usages.map(u=>{
+      const w=wineById(u.wineId); if(!w) return null;
+      const obj=u.compIdx==null?w:w.components[u.compIdx];
+      return obj?byId(obj[field])?.name:null;
+    }).filter(Boolean))];
+  }
+
+  // ── Stage rows: separator lines, clickable labels, collapsed bars ──
+  const bandEls=[];
+  const rowInstances=[['grape','🍇 Grapes',yG]];
+  rowInstances.push(['primary','🪣 Primary',yP],['secondary','⚗️ Secondary',yS]);
+  if(hasSV) rowInstances.push(['aging','🛢 Aging',yA1,'aging1'],['bottling','🍾 Bottles',yB1,'bottling1']);
+  if(hasBlend) rowInstances.push(['aging','🛢 Aging',yA2,'aging2'],['bottling','🍾 Bottles',yB2,'bottling2']);
+  rowInstances.forEach(([k,lbl,y0,sumKey])=>{
+    els.push(`<line x1="${PAD_LEFT-2}" y1="${y0}" x2="${totalW-5}" y2="${y0}" stroke="#E8DEC8" stroke-width="1" stroke-dasharray="4,3"/>`);
+    const midY=y0+stH(k)/2+4;
+    if(k==='grape'){
+      els.push(`<text x="${PAD_LEFT-8}" y="${midY}" text-anchor="end" font-size="11" fill="#7A6358" font-family="Georgia" font-style="italic">${lbl}</text>`);
+    } else {
+      els.push(`<g onclick="toggleFcStage('${k}')" style="cursor:pointer"><title>${vis(k)?'Collapse':'Expand'} ${lbl}</title><rect x="4" y="${y0+4}" width="${PAD_LEFT-12}" height="${stH(k)-8}" fill="transparent"/><text x="${PAD_LEFT-8}" y="${midY}" text-anchor="end" font-size="11" fill="#7A6358" font-family="Georgia" font-style="italic">${vis(k)?'▾':'▸'} ${lbl}</text></g>`);
+      if(!vis(k)){
+        bandEls.push(`<g onclick="toggleFcStage('${k}')" style="cursor:pointer"><title>Expand ${lbl}</title><rect x="${PAD_LEFT-2}" y="${y0+5}" width="${totalW-PAD_LEFT-8}" height="${COL_H-10}" rx="6" fill="#F1E8D8" stroke="#E0D3B8"/><text x="${totalW-16}" y="${y0+COL_H/2+3.5}" text-anchor="end" font-size="10" fill="#A08A6A" font-family="Georgia" font-style="italic">${lbl} — ${summary[sumKey||k]} · click to expand</text></g>`);
+      }
+    }
+  });
+
+  // ── Section dividers ──
+  if(hasSV){
+    els.push(`<line x1="${PAD_LEFT-2}" y1="${yDiv1+8}" x2="${totalW-5}" y2="${yDiv1+8}" stroke="#C9A88C" stroke-width="1.5" stroke-dasharray="2,4" opacity="0.55"/>`);
+    els.push(`<text x="${PAD_LEFT}" y="${yDiv1+3}" font-size="10" fill="#A88E6A" font-family="Georgia" font-style="italic" font-weight="bold">Varietals ▼ Single Varietal Wines</text>`);
+  }
+  if(hasBlend){
+    els.push(`<line x1="${PAD_LEFT-2}" y1="${yDiv2+6}" x2="${totalW-5}" y2="${yDiv2+6}" stroke="#C9A88C" stroke-width="1.5" stroke-dasharray="2,4" opacity="0.55"/>`);
+    els.push(`<text x="${PAD_LEFT}" y="${yDiv2+1}" font-size="10" fill="#A88E6A" font-family="Georgia" font-style="italic" font-weight="bold">▼ Blends</text>`);
+  }
+
+  // ── Blend ribbons: fat, semi-transparent arrows drawn BEHIND the SV cards ──
+  // Source points must be known before cards paint, so compute them here.
+  const gBot0=rTop(yG,'grape')+NH;
+  fermLines.forEach(l=>{
+    l.srcY=vis('secondary')?rTop(yS,'secondary')+NH:vis('primary')?rTop(yP,'primary')+NH:gBot0+18;
+  });
+  const ribbonEls=[];
+  blendCols.forEach(bc=>{
+    const wColor=bc.wine.color==='red'?'#8B0000':'#C9A84C';
+    bc.srcLines.forEach(line=>{
+      const d=line.blendDests.find(x=>x.wineId===bc.wine.id); if(!d||d.gal<=0.05) return;
+      const lx=line.cx, sy=line.srcY; if(lx==null||sy==null) return;
+      const dy=cardTop2;
+      const my1=sy+(dy-sy)*0.3, my2=Math.max(dy-46,sy+(dy-sy)*0.6);
+      ribbonEls.push(`<path d="M${lx},${sy} C${lx},${my1} ${bc.cx},${my2} ${bc.cx},${dy-12}" stroke="${wColor}" stroke-width="14" fill="none" stroke-opacity="0.12" stroke-linecap="butt"/>`);
+      ribbonEls.push(`<path d="M${bc.cx-12},${dy-14} L${bc.cx+12},${dy-14} L${bc.cx},${dy} Z" fill="${wColor}" fill-opacity="0.2"/>`);
+    });
+  });
+  ribbonEls.forEach(r=>els.push(r));
+
+  // ── Cards for both sections ──
+  svCols.forEach(c=>{
+    els.push(`<rect x="${c.cx-c.w/2-2}" y="${cardTop1}" width="${c.w+4}" height="${cardBot1-cardTop1}" rx="12" fill="rgba(255,255,255,0.65)" stroke="#E6DAC2" stroke-width="1"/>`);
+  });
+  blendCols.forEach(c=>{
+    els.push(`<rect x="${c.cx-c.w/2-2}" y="${cardTop2}" width="${c.w+4}" height="${cardBot2-cardTop2}" rx="12" fill="rgba(255,255,255,0.65)" stroke="#E6DAC2" stroke-width="1"/>`);
+  });
+  bandEls.forEach(b=>els.push(b));
+
+  // ── TOP SECTION: grapes + fermentation lines ──
+  const gTop=rTop(yG,'grape'), gBot=gTop+NH;
+  const pTop=rTop(yP,'primary'), pBot=pTop+NH, pMid=pTop+NH/2;
+  const sTop=rTop(yS,'secondary'), sBot=sTop+NH, sMid=sTop+NH/2;
+  const firstVarStage=vis('primary')?'P':(vis('secondary')?'S':null);
+  const firstTop=firstVarStage==='P'?pTop:sTop;
+  grapeNodeInfo.forEach(({grapeId,nodeCx,cols})=>{
+    const grape=grapeById(grapeId);
+    const allocEntry=allocMap.get(grapeId);
+    const totalLbs=grape?.pounds||0;
+    const lbsLabel=allocEntry?.usedLbs>0?`${Math.round(allocEntry.usedLbs)} / ${Math.round(totalLbs)} lbs`:`${Math.round(totalLbs)} lbs`;
+    node(nodeCx,gTop,grape?.name||'Grape',lbsLabel,grape?.type==='white'?'#B8860B':'#8B0000');
+    if(cols.length>1){
+      const badgeY=gTop-18;
+      els.push(`<rect x="${nodeCx-46}" y="${badgeY-12}" width="92" height="14" rx="4" fill="#e8f4fd" stroke="#aed6f1" stroke-width="1"/>`);
+      els.push(`<text x="${nodeCx}" y="${badgeY-1}" text-anchor="middle" font-size="9" fill="#1565c0" font-family="Georgia">${cols.length} ferment. lines</text>`);
+    }
+    const needBus=cols.length>1||!firstVarStage;
+    let busY=null;
+    if(needBus){
+      busY=gBot+18;
+      const colXs=cols.map(c=>c.cx);
+      const minCx=Math.min(...colXs,nodeCx),maxCx=Math.max(...colXs,nodeCx);
+      els.push(`<line x1="${nodeCx}" y1="${gBot}" x2="${nodeCx}" y2="${busY}" stroke="#999" stroke-width="2"/>`);
+      if(minCx!==maxCx) els.push(`<line x1="${minCx}" y1="${busY}" x2="${maxCx}" y2="${busY}" stroke="#999" stroke-width="2"/>`);
+      cols.forEach(col=>{
+        const yeast=yeastById(col.line.yeastId);
+        if(yeast) els.push(`<text x="${col.cx}" y="${busY-5}" text-anchor="middle" font-size="9" fill="#7A6358" font-family="Georgia">${yeast.name}</text>`);
+        if(firstVarStage) els.push(`<line x1="${col.cx}" y1="${busY}" x2="${col.cx}" y2="${firstTop-5}" stroke="#999" stroke-width="2" marker-end="url(#arr)"/>`);
+      });
+    } else if(firstVarStage){
+      arrLine(nodeCx,gBot,nodeCx,firstTop);
+    }
+    cols.forEach(col=>{
+      const {line,cx,roseCx,hasRose}=col;
+      const yeast=yeastById(line.yeastId);
+      if(vis('primary')){
+        const primNames=eqNamesFor(line,'primaryEquipmentId');
+        node(cx,pTop,primNames.length===1?primNames[0]:primNames.length>1?primNames.length+' tanks':'Primary',
+          (yeast?yeast.name+' · ':'')+fmtGal(line.totalMustGal),'#4A4A6A');
+        if(vis('secondary')) arrLine(cx,pBot,cx,sTop);
+      }
+      if(vis('secondary')){
+        const secNames=eqNamesFor(line,'secondaryEquipmentId');
+        node(cx,sTop,secNames.length===1?secNames[0]:secNames.length>1?secNames.length+' tanks':'Secondary',
+          fmtGal(line.totalSecGal),'#3A5A7A');
+      }
+      line.srcY=vis('secondary')?sBot:vis('primary')?pBot:busY;
+      if(hasRose&&line.roseCalc){
+        if(vis('primary')){
+          hArrow(cx+NW/2,pMid,roseCx-NW/2,'#D4798A',true);
+          node(roseCx,pTop,'🌹 Rosé Primary',fmtGal(line.roseCalc.primaryGal),'#D4798A');
+          if(vis('secondary')) arrLine(roseCx,pBot,roseCx,sTop,'#D4798A');
+        }
+        if(vis('secondary')){
+          if(!vis('primary')) hArrow(cx+NW/2,sMid,roseCx-NW/2,'#D4798A',true);
+          node(roseCx,sTop,'🌹 Rosé Secondary',fmtGal(line.roseCalc.secondaryGal),'#C06080');
+        }
+        line.roseSrcY=vis('secondary')?sBot:vis('primary')?pBot:null;
+      }
+    });
+  });
+
+  // ── Section 1 arrows: near-vertical drops into aligned SV cards ──
+  const destStack=new Map();
+  const labelAt=(destCx,gal,color,txt)=>{
+    const n=destStack.get(destCx)||0;
+    const flip=destCx>totalW-150;
+    els.push(`<text x="${destCx+(flip?-7:7)}" y="${cardTop1-7-n*11}" text-anchor="${flip?'end':'start'}" font-size="9" fill="${color}" font-family="Georgia" font-style="italic">${fmtGal(gal)} ${txt}</text>`);
+    destStack.set(destCx,n+1);
+  };
+  orderedLines.forEach(line=>{
+    if(line.cx==null||line.srcY==null) return;
+    const grapeName=grapeById(line.grapeId)?.name||'';
+    const seen=new Set();
+    line.wineDests.forEach(d=>{
+      if(seen.has(d.wineId)) return; seen.add(d.wineId);
+      const c=singleByWineId.get(d.wineId); if(!c||d.gal<=0.05) return;
+      const wColor=c.wine.color==='red'?'#8B0000':'#C9A84C';
+      arrLine(line.cx,line.srcY,c.cx,cardTop1,wColor);
+      labelAt(c.cx,d.gal,wColor,grapeName);
+    });
+    const pool=svPools.get(line.key);
+    if(pool&&pool.totalExcessGal>0.05){
+      const c=svByKey.get(line.key);
+      if(c){ arrLine(line.cx,line.srcY,c.cx,cardTop1,'#7B6A5A',true); labelAt(c.cx,pool.totalExcessGal,'#7B6A5A','excess'); }
+    }
+    if(line.roseCalc){
+      const c=roseByLineKey.get(line.key);
+      if(c){
+        const rx=line.roseSrcY!=null?line.roseCx:line.cx;
+        const ry=line.roseSrcY!=null?line.roseSrcY:line.srcY;
+        arrLine(rx,ry,c.cx,cardTop1,'#D4798A',true);
+        labelAt(c.cx,line.roseCalc.agingGal,'#D4798A','saignée');
+      }
+    }
+  });
+
+  // ── Section 2 labels: gallons at each ribbon's source, "X gal → Blend" ──
+  const srcLabelCount=new Map();
+  const srcLabel=(line,txt,color)=>{
+    const n=srcLabelCount.get(line.key)||0;
+    const flip=line.cx>totalW-190;
+    els.push(`<text x="${line.cx+(flip?-11:11)}" y="${line.srcY+16+n*11}" text-anchor="${flip?'end':'start'}" font-size="9" fill="${color}" font-family="Georgia" font-style="italic">${txt}</text>`);
+    srcLabelCount.set(line.key,n+1);
+  };
+  blendCols.forEach(bc=>{
+    const wColor=bc.wine.color==='red'?'#8B0000':'#C9A84C';
+    let drawn=0;
+    bc.srcLines.forEach(line=>{
+      const d=line.blendDests.find(x=>x.wineId===bc.wine.id); if(!d||d.gal<=0.05) return;
+      if(line.cx==null||line.srcY==null) return;
+      srcLabel(line,`${fmtGal(d.gal)} → ${bc.wine.name}`,wColor);
+      if(d.shortfall>0.05) srcLabel(line,`⚠ short ${fmtGal(d.shortfall)}`,'#c0392b');
+      drawn++;
+    });
+    if(!drawn){ // blend with no live sources — flag it so it's visible
+      els.push(`<text x="${bc.cx}" y="${cardTop2-8}" text-anchor="middle" font-size="9" fill="#c0392b" font-family="Georgia" font-style="italic">⚠ no active sources</text>`);
+    }
+  });
+
+  // ── Section 1 card contents ──
+  const h1a=cardTop1+19,h1b=cardTop1+34,h1c=cardTop1+47;
+  const a1Top=rTop(yA1,'aging'), a1Bot=a1Top+NH, b1Top=rTop(yB1,'bottling');
+  svCols.forEach(c=>{
+    const cx=c.cx;
+    if(c.kind==='single'){
+      const {wine,calc}=c;
+      const wColor=wine.color==='red'?'#8B0000':'#C9A84C';
+      const gOff=wine.grapeId&&!isGrapeActive(wine.grapeId);
+      els.push(`<text x="${cx}" y="${h1a}" text-anchor="middle" font-size="14" font-weight="bold" fill="${wColor}" font-family="Georgia">${wine.name}</text>`);
+      els.push(`<text x="${cx}" y="${h1b}" text-anchor="middle" font-size="11" fill="#7A6358" font-family="Georgia">Single Varietal</text>`);
+      if(gOff) els.push(`<text x="${cx}" y="${h1c}" text-anchor="middle" font-size="9" fill="#c0392b" font-family="Georgia" font-style="italic">⚠ grape inactive</text>`);
+      const ageEq=byId(wine.agingEquipmentId),ageColor=wine.useOak?'#5D8A5E':'#2C7BB6';
+      if(vis('aging')){
+        node(cx,a1Top,ageEq?.name||'Aging Vessel',calc?fmtGal(calc.agingGal)+(wine.useOak&&wine.oakType?' · '+wine.oakType:''):'—',ageColor);
+        if(vis('bottling')) arrLine(cx,a1Bot,cx,b1Top,ageColor);
+      }
+      if(vis('bottling')) node(cx,b1Top,'🍾 '+wine.name,calc?`~${calc.bottles} bottles`:'—','#2C3E50');
+    } else if(c.kind==='sv'){
+      const {pool}=c;
+      const grape=grapeById(pool.grapeId),yeast=yeastById(pool.yeastId),ageEq=byId(pool.eqId);
+      const grapeName=grape?.name||'SV';
+      const srcNames=[...new Set(pool.sources.map(s=>wineById(s.wineId)?.name||'').filter(Boolean))];
+      els.push(`<text x="${cx}" y="${h1a}" text-anchor="middle" font-size="13" font-weight="bold" fill="#7B6A5A" font-family="Georgia">${grapeName}</text>`);
+      els.push(`<text x="${cx}" y="${h1b}" text-anchor="middle" font-size="10" fill="#999" font-family="Georgia">SV Wine${yeast?' · '+yeast.name:''}</text>`);
+      if(srcNames.length) els.push(`<text x="${cx}" y="${h1c}" text-anchor="middle" font-size="9" fill="#bbb" font-family="Georgia" font-style="italic">excess from ${srcNames.join(', ')}</text>`);
+      if(vis('aging')){
+        node(cx,a1Top,ageEq?.name||grapeName+' SV',fmtGal(pool.agingGal),'#7B6A5A');
+        if(vis('bottling')) arrLine(cx,a1Bot,cx,b1Top,'#7B6A5A');
+      }
+      if(vis('bottling')) node(cx,b1Top,grapeName+' SV',`~${pool.bottles} btl`,'#5A4A3A');
+    } else {
+      const {line}=c;
+      const grapeName=grapeById(line.grapeId)?.name||'Rosé';
+      const rAgeEq=byId(line.roseAgingEquipmentId);
+      els.push(`<text x="${cx}" y="${h1a}" text-anchor="middle" font-size="13" font-weight="bold" fill="#A04060" font-family="Georgia">🌹 ${grapeName}</text>`);
+      els.push(`<text x="${cx}" y="${h1b}" text-anchor="middle" font-size="10" fill="#999" font-family="Georgia">Rosé (saignée)</text>`);
+      if(vis('aging')){
+        node(cx,a1Top,rAgeEq?rAgeEq.name:'Rosé Aging',fmtGal(line.roseCalc.agingGal),'#A04060');
+        if(vis('bottling')) arrLine(cx,a1Bot,cx,b1Top,'#D4798A');
+      }
+      if(vis('bottling')) node(cx,b1Top,'🌹 Rosé Bottles',`~${line.roseCalc.bottles} btl`,'#804050');
+    }
+  });
+
+  // ── Section 2 card contents ──
+  const h2a=cardTop2+19,h2b=cardTop2+34;
+  const a2Top=rTop(yA2,'aging'), a2Bot=a2Top+NH, b2Top=rTop(yB2,'bottling');
+  blendCols.forEach(c=>{
+    const {wine,calc,cx}=c;
+    const wColor=wine.color==='red'?'#8B0000':'#C9A84C';
+    els.push(`<text x="${cx}" y="${h2a}" text-anchor="middle" font-size="14" font-weight="bold" fill="${wColor}" font-family="Georgia">${wine.name}</text>`);
+    els.push(`<text x="${cx}" y="${h2b}" text-anchor="middle" font-size="11" fill="#7A6358" font-family="Georgia">Blend · ${wine.components.length} varieties</text>`);
+    const ageEq=byId(wine.agingEquipmentId),ageColor=wine.useOak?'#5D8A5E':'#2C7BB6';
+    if(vis('aging')){
+      node(cx,a2Top,ageEq?.name||'Blend Aging',calc?fmtGal(calc.agingGal)+(wine.useOak&&wine.oakType?' · '+wine.oakType:''):'—',ageColor);
+      if(vis('bottling')) arrLine(cx,a2Bot,cx,b2Top,ageColor);
+    }
+    if(vis('bottling')) node(cx,b2Top,'🍾 '+wine.name,calc?`~${calc.blendBottles} btl`:'—','#2C3E50');
+  });
+
+  const z=S.ui.fcZoom||1;
+  return `<svg width="${Math.round(totalW*z)}" height="${Math.round(totalH*z)}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg">${els.join('\n')}</svg>`;
+}
+
+// ════════════════════════════════════════════
+// EVENT HANDLERS
+// ════════════════════════════════════════════
+function setSVEquipment(key,eqId){
+  if(!S.svEquipment)S.svEquipment={};
+  S.svEquipment[key]=eqId||null;
+  render();
+}
+function condShow(type,material){ return type==='barrel'||material==='oak'; }
+function toggleOakField(){
+  const m=document.getElementById('eq-m'),t=document.getElementById('eq-t'),f=document.getElementById('oak-field');
+  if(f) f.style.display=m.value==='oak'?'block':'none';
+  const cf=document.getElementById('cond-field'); if(cf) cf.style.display=condShow(t?.value,m.value)?'block':'none';
+  toggleTimesField();
+}
+function toggleOakFieldEdit(){
+  const m=document.getElementById('eq-edit-m'),t=document.getElementById('eq-edit-t'),f=document.getElementById('oak-field-edit');
+  if(f) f.style.display=m.value==='oak'?'block':'none';
+  const cf=document.getElementById('cond-field-edit'); if(cf) cf.style.display=condShow(t?.value,m.value)?'block':'none';
+  const tf=document.getElementById('times-field-edit'),cs=document.getElementById('eq-edit-cond');
+  if(tf) tf.style.display=(condShow(t?.value,m.value)&&cs?.value==='used')?'block':'none';
+}
+function toggleTimesField(){
+  const tf=document.getElementById('times-field'),cs=document.getElementById('eq-cond'),cf=document.getElementById('cond-field');
+  if(tf) tf.style.display=(cf&&cf.style.display!=='none'&&cs?.value==='used')?'block':'none';
+}
+function setEqField(id,field,val){ const eq=byId(id); if(!eq) return; eq[field]=val; render(); }
+function toggleEqGroup(u){ if(!S.ui.eqGroupCollapsed) S.ui.eqGroupCollapsed={}; S.ui.eqGroupCollapsed[u]=!S.ui.eqGroupCollapsed[u]; render(); }
+function setGrapeDefaults(){ const t=document.getElementById('g-t'),l=document.getElementById('g-lpg'); if(l) l.value=t.value==='white'?'12':'13'; }
+function toggleEqUse(eqId,use,checked){
+  const eq=byId(eqId); if(!eq) return;
+  if(!eq.uses) eq.uses=[];
+  if(checked&&!eq.uses.includes(use)) eq.uses.push(use);
+  if(!checked) eq.uses=eq.uses.filter(u=>u!==use);
+  render();
+}
+function saveEq(){
+  const n=document.getElementById('eq-n')?.value.trim();
+  const t=document.getElementById('eq-t')?.value;
+  const m=document.getElementById('eq-m')?.value;
+  const v=parseFloat(document.getElementById('eq-v')?.value);
+  const q=parseInt(document.getElementById('eq-q')?.value)||1;
+  const ot=document.getElementById('eq-ot')?.value;
+  const reuses=parseInt(document.getElementById('eq-r')?.value)||0;
+  const isBarrel=condShow(t,m);
+  const condition=isBarrel?(document.getElementById('eq-cond')?.value||'new'):null;
+  const timesUsed=isBarrel&&condition==='used'?(parseInt(document.getElementById('eq-tu')?.value)||0):0;
+  const uses=getUsesFromForm('eq');
+  if(!n||!v) return alert('Name and volume required.');
+  S.equipment.push({id:uid(),name:n,type:t,material:m,volumeGal:v,qty:q,oakType:m==='oak'?ot:null,uses,reuses,condition,timesUsed});
+  S.ui.showEqForm=false; render();
+}
+function saveEqEdit(id){
+  const eq=byId(id); if(!eq) return;
+  const n=document.getElementById('eq-edit-n')?.value.trim();
+  const t=document.getElementById('eq-edit-t')?.value;
+  const m=document.getElementById('eq-edit-m')?.value;
+  const v=parseFloat(document.getElementById('eq-edit-v')?.value);
+  const q=parseInt(document.getElementById('eq-edit-q')?.value)||1;
+  const ot=document.getElementById('eq-edit-ot')?.value;
+  const reuses=parseInt(document.getElementById('eq-edit-r')?.value)||0;
+  const isBarrel=condShow(t,m);
+  const condition=isBarrel?(document.getElementById('eq-edit-cond')?.value||'new'):null;
+  const timesUsed=isBarrel&&condition==='used'?(parseInt(document.getElementById('eq-edit-tu')?.value)||0):0;
+  const uses=getUsesFromForm('eq-edit');
+  if(!n||!v) return alert('Name and volume required.');
+  Object.assign(eq,{name:n,type:t,material:m,volumeGal:v,qty:q,oakType:m==='oak'?ot:null,uses,reuses,condition,timesUsed});
+  S.ui.editingEqId=null; render();
+}
+function delEq(id){ if(!confirm('Remove this equipment?')) return; S.equipment=S.equipment.filter(e=>e.id!==id); render(); }
+
+function saveGrape(){
+  const n=document.getElementById('g-n')?.value.trim(), t=document.getElementById('g-t')?.value;
+  const p=parseFloat(document.getElementById('g-p')?.value), lpg=parseFloat(document.getElementById('g-lpg')?.value);
+  const origin=document.getElementById('g-origin')?.value.trim(), brix=parseFloat(document.getElementById('g-brix')?.value)||null;
+  const hsp=document.getElementById('g-hsp')?.value, hsm=document.getElementById('g-hsm')?.value;
+  const hep=document.getElementById('g-hep')?.value, hem=document.getElementById('g-hem')?.value;
+  if(!n||!p) return alert('Name and pounds required.');
+  S.grapes.push({id:uid(),name:n,type:t,pounds:p,lbsPerGal:lpg||13,origin,targetBrix:brix,
+    harvestStartPeriod:hsp,harvestStartMonth:hsm,harvestEndPeriod:hep,harvestEndMonth:hem});
+  S.ui.showGrapeForm=false; render();
+}
+function saveGrapeEdit(id){
+  const g=grapeById(id); if(!g) return;
+  const n=document.getElementById('ge-n')?.value.trim(), t=document.getElementById('ge-t')?.value;
+  const p=parseFloat(document.getElementById('ge-p')?.value), lpg=parseFloat(document.getElementById('ge-lpg')?.value);
+  const origin=document.getElementById('ge-origin')?.value.trim(), brix=parseFloat(document.getElementById('ge-brix')?.value)||null;
+  const hsp=document.getElementById('ge-hsp')?.value, hsm=document.getElementById('ge-hsm')?.value;
+  const hep=document.getElementById('ge-hep')?.value, hem=document.getElementById('ge-hem')?.value;
+  if(!n||!p) return alert('Name and pounds required.');
+  Object.assign(g,{name:n,type:t,pounds:p,lbsPerGal:lpg||13,origin,targetBrix:brix,
+    harvestStartPeriod:hsp,harvestStartMonth:hsm,harvestEndPeriod:hep,harvestEndMonth:hem});
+  S.ui.editingGrapeId=null; render();
+}
+function delGrape(id){ if(!confirm('Remove this grape?')) return; S.grapes=S.grapes.filter(g=>g.id!==id); render(); }
+function toggleGrapeActive(id){ const g=grapeById(id); if(!g) return; g.active=g.active===false; render(); }
+function toggleWineActive(id){ const w=wineById(id); if(!w) return; w.active=w.active===false; render(); }
+function isGrapeActive(id){ const g=grapeById(id); return !!g&&g.active!==false; }
+
+function _getCustomYeastFromForm(prefix){
+  const n=document.getElementById(`${prefix}-name`)?.value.trim();
+  const brand=document.getElementById(`${prefix}-brand`)?.value.trim()||'Custom';
+  const alc=parseFloat(document.getElementById(`${prefix}-alc`)?.value)||null;
+  const temp=document.getElementById(`${prefix}-temp`)?.value.trim()||'';
+  const desc=document.getElementById(`${prefix}-desc`)?.value.trim()||'';
+  const tags=['red','white','rose'].filter(t=>document.getElementById(`${prefix}-tag-${t}`)?.checked);
+  return {n,brand,alc,temp,desc,tags};
+}
+function saveCustomYeast(){
+  const {n,brand,alc,temp,desc,tags}=_getCustomYeastFromForm('cy');
+  if(!n) return alert('Yeast name is required.');
+  if(!S.customYeasts) S.customYeasts=[];
+  S.customYeasts.push({id:uid(),name:n,fullName:n,brand,alc,temp,desc,tags,recFor:[]});
+  S.ui.showCustomYeastForm=false; render();
+}
+function saveCustomYeastEdit(id){
+  const y=(S.customYeasts||[]).find(y=>y.id===id); if(!y) return;
+  const {n,brand,alc,temp,desc,tags}=_getCustomYeastFromForm('cy-edit');
+  if(!n) return alert('Yeast name is required.');
+  Object.assign(y,{name:n,fullName:n,brand,alc,temp,desc,tags});
+  S.ui.editingYeastId=null; render();
+}
+function delCustomYeast(id){
+  if(!confirm('Remove this custom yeast?')) return;
+  S.customYeasts=(S.customYeasts||[]).filter(y=>y.id!==id); render();
+}
+
+function newWine(){
+  const id=uid();
+  S.wines.push({id,name:'New Wine',color:'red',wineType:'single',lbsPerGal:13,
+    components:[],grapeId:S.grapes[0]?.id||null,
+    agingEquipmentId:null,agingVolumeGal:6,useOak:false,oakType:null,
+    secondaryEquipmentId:null,primaryEquipmentId:null,
+    hasRose:false,saigneePercent:10,roseAgingEquipmentId:null,roseAgingVolumeGal:0,
+    roseYeastId:null,yeastId:null,useTankSplit:false,
+    tanks:[{id:uid(),name:'Tank A',percent:100,yeastId:null,blendPct:100}]});
+  S.ui.wineId=id; render();
+}
+
+// ── Classic blend templates: pick an idea, get the grapes you need ──
+const BLEND_TEMPLATES=[
+  {name:'Bordeaux — Left Bank',color:'red',note:'Cabernet-dominant, structured & age-worthy',comps:[['Cabernet Sauvignon',70],['Merlot',20],['Cabernet Franc',7],['Petit Verdot',3]]},
+  {name:'Bordeaux — Right Bank',color:'red',note:'Merlot-dominant, plush & approachable',comps:[['Merlot',70],['Cabernet Franc',25],['Cabernet Sauvignon',5]]},
+  {name:'GSM / Rhône Red',color:'red',note:'Grenache-Syrah-Mourvèdre, warm & spicy',comps:[['Grenache',50],['Syrah',30],['Mourvèdre',20]]},
+  {name:'Châteauneuf-style',color:'red',note:'Grenache-led southern Rhône',comps:[['Grenache',60],['Syrah',20],['Mourvèdre',15],['Cinsault',5]]},
+  {name:'Super Tuscan',color:'red',note:'Sangiovese + Bordeaux varieties',comps:[['Sangiovese',60],['Cabernet Sauvignon',25],['Merlot',15]]},
+  {name:'Chianti-style',color:'red',note:'Sangiovese-based Tuscan',comps:[['Sangiovese',80],['Canaiolo',10],['Merlot',10]]},
+  {name:'Douro / Port-style',color:'red',note:'Portuguese field blend',comps:[['Touriga Nacional',40],['Touriga Franca',30],['Tinta Roriz',20],['Tinta Barroca',10]]},
+  {name:'Priorat-style',color:'red',note:'Garnacha + Cariñena, bold',comps:[['Grenache',55],['Carignan',30],['Syrah',15]]},
+  {name:'White Bordeaux',color:'white',note:'Sauvignon Blanc + Sémillon',comps:[['Sauvignon Blanc',70],['Sémillon',30]]},
+  {name:'Rhône White',color:'white',note:'Aromatic southern white',comps:[['Grenache Blanc',50],['Viognier',30],['Roussanne',20]]},
+];
+function normName(s){ return (s||'').toLowerCase().replace(/[^a-z]/g,''); }
+function findGrapeByName(name){
+  const n=normName(name);
+  return S.grapes.find(g=>{ const gn=normName(g.name); return gn===n||gn.includes(n)||n.includes(gn); })||null;
+}
+// For a template + target aging volume, compute per-grape gallons & pounds needed
+function blendIdeaPlan(tpl,agingGal){
+  const blendSec=agingGal/LOSS.sToA;
+  const defLbpg=tpl.color==='white'?12:13;
+  return tpl.comps.map(([name,pct])=>{
+    const existing=findGrapeByName(name);
+    const lbpg=existing?.lbsPerGal||defLbpg;
+    const secGal=blendSec*pct/100;
+    const mustGal=secGal/LOSS.pToS;
+    const lbsNeeded=mustGal*lbpg;
+    const totalLbs=existing?existing.pounds:0;
+    const remainLbs=existing?(calcGrapeAllocations().get(existing.id)?.remainingLbs??existing.pounds):0;
+    return {name,pct,existing,lbpg,secGal,mustGal,lbsNeeded,totalLbs,remainLbs};
+  });
+}
+function createBlendFromIdea(tplIdx,agingGal){
+  const tpl=BLEND_TEMPLATES[tplIdx]; if(!tpl) return;
+  const plan=blendIdeaPlan(tpl,agingGal);
+  const components=plan.map(p=>{
+    let g=p.existing;
+    if(!g){ // add a suggested grape to inventory with the pounds this blend needs
+      g={id:uid(),name:p.name,type:tpl.color==='white'?'white':'red',pounds:Math.ceil(p.lbsNeeded),
+         lbsPerGal:p.lbpg,origin:'(suggested — set your source)',targetBrix:tpl.color==='white'?22:24,
+         harvestStartPeriod:'Mid',harvestStartMonth:'September',harvestEndPeriod:'Early',harvestEndMonth:'October'};
+      S.grapes.push(g);
+    }
+    return {grapeId:g.id,ratio:p.pct,primaryEquipmentId:null,secondaryEquipmentId:null,
+      hasRose:false,saigneePercent:10,roseAgingEquipmentId:null,roseAgingVolumeGal:0,
+      roseYeastId:null,singleAgingEquipmentId:null,
+      yeastId:null,useTankSplit:false,tanks:[{id:uid(),name:'Tank A',percent:100,yeastId:null,blendPct:100}]};
+  });
+  const id=uid();
+  S.wines.push({id,name:tpl.name,color:tpl.color,wineType:'blend',lbsPerGal:tpl.color==='white'?12:13,
+    components,grapeId:null,
+    agingEquipmentId:null,agingVolumeGal:agingGal,useOak:false,oakType:null,
+    secondaryEquipmentId:null,primaryEquipmentId:null,
+    hasRose:false,saigneePercent:0,roseAgingEquipmentId:null,roseAgingVolumeGal:0,
+    roseYeastId:null,yeastId:null,useTankSplit:false,tanks:[]});
+  S.ui.wineId=id; S.ui.showBlendIdeas=false; render();
+}
+function delWine(id){ if(!confirm('Delete this wine project?')) return; S.wines=S.wines.filter(w=>w.id!==id); S.ui.wineId=S.wines[0]?.id||null; render(); }
+function updateWine(id,key,val){
+  const w=wineById(id); if(!w) return; w[key]=val;
+  if(key==='color'&&val!=='red'){ w.hasRose=false; w.components.forEach(c=>c.hasRose=false); }
+  if(key==='useTankSplit'&&val&&(!w.tanks||w.tanks.length===0))
+    w.tanks=[{id:uid(),name:'Tank A',percent:100,yeastId:w.yeastId,blendPct:100}];
+  render();
+}
+function pickAgingEq(wid,eqId){
+  const w=wineById(wid); if(!w) return; w.agingEquipmentId=eqId;
+  const eq=byId(eqId);
+  if(eq){w.agingVolumeGal=eq.volumeGal; if(eq.material==='oak'){w.useOak=true;w.oakType=eq.oakType||'french';}}
+  render();
+}
+function pickRoseEq(wid,compIdx,eqId){
+  const w=wineById(wid); if(!w) return; const eq=byId(eqId);
+  if(compIdx!==null&&compIdx!==undefined&&w.components[compIdx]){
+    w.components[compIdx].roseAgingEquipmentId=eqId; w.components[compIdx].roseAgingVolumeGal=eq?.volumeGal||0;
+  } else { w.roseAgingEquipmentId=eqId; w.roseAgingVolumeGal=eq?.volumeGal||0; }
+  render();
+}
+function addComp(wid){
+  const w=wineById(wid); if(!w) return;
+  const gid=S.grapes.find(g=>g.type===w.color)?.id||S.grapes[0]?.id||null;
+  w.components.push({grapeId:gid,ratio:0,primaryEquipmentId:null,secondaryEquipmentId:null,
+    hasRose:false,saigneePercent:10,roseAgingEquipmentId:null,roseAgingVolumeGal:0,
+    roseYeastId:null,singleAgingEquipmentId:null,
+    yeastId:null,useTankSplit:false,tanks:[{id:uid(),name:'Tank A',percent:100,yeastId:null,blendPct:100}]});
+  render();
+}
+function removeComp(wid,idx){ const w=wineById(wid); if(!w) return; w.components.splice(idx,1); render(); }
+function updateComp(wid,idx,key,val){
+  const w=wineById(wid); if(!w||!w.components[idx]) return; w.components[idx][key]=val;
+  if(key==='useTankSplit'&&val&&(!w.components[idx].tanks||w.components[idx].tanks.length===0))
+    w.components[idx].tanks=[{id:uid(),name:'Tank A',percent:100,yeastId:w.components[idx].yeastId,blendPct:100}];
+  render();
+}
+function addTank(wid,ciRaw){
+  const w=wineById(wid); if(!w) return;
+  const ci=ciRaw==='null'||ciRaw===null||ciRaw===undefined?null:parseInt(ciRaw);
+  const arr=ci!==null?w.components[ci].tanks:w.tanks;
+  if(!arr) return;
+  arr.push({id:uid(),name:'Tank '+String.fromCharCode(65+arr.length),percent:0,yeastId:null,blendPct:100});
+  render();
+}
+function removeTank(wid,ciRaw,ti){
+  const w=wineById(wid); if(!w) return;
+  const ci=ciRaw==='null'||ciRaw===null||ciRaw===undefined?null:parseInt(ciRaw);
+  const arr=ci!==null?w.components[ci].tanks:w.tanks;
+  if(arr) arr.splice(ti,1); render();
+}
+function updateTank(wid,ciRaw,ti,key,val){
+  const w=wineById(wid); if(!w) return;
+  const ci=ciRaw==='null'||ciRaw===null||ciRaw===undefined?null:parseInt(ciRaw);
+  const arr=ci!==null?w.components[ci].tanks:w.tanks;
+  if(arr&&arr[ti]) arr[ti][key]=val; render();
+}
+
+document.addEventListener('DOMContentLoaded',()=>initStorage());
+</script>
+</body>
+</html>
