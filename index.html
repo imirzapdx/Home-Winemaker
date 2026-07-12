@@ -104,6 +104,8 @@ body{font-family:Georgia,'Palatino Linotype',serif;background:var(--bg);color:va
 .spec-row .k{color:var(--muted)}
 .spec-row .v{font-weight:bold;text-align:right}
 .card-inactive-tag{font-size:9px;background:#eee;border:1px solid #ccc;border-radius:3px;padding:1px 5px;color:#888;vertical-align:middle}
+.status-pill{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:bold;padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid rgba(0,0,0,.08);user-select:none}
+.status-pill:hover{filter:brightness(.96)}
 .rose-section{background:var(--rose-lt);border:1px solid #e8b4c0;border-radius:var(--r);padding:8px 10px;margin-top:8px}
 .info-note{background:#eaf4fb;border:1px solid #aed6f1;border-radius:var(--r);padding:8px 10px;font-size:12px;color:#1a5276;margin-top:6px}
 .warn-note{background:#fdedec;border:1px solid #f5b7b1;border-radius:var(--r);padding:8px 10px;font-size:12px;color:#922b21;margin-top:6px}
@@ -1064,37 +1066,53 @@ function renderGrapePanel(){
       </div></div>` : '';
 
   const allocMap = calcGrapeAllocations();
+  const gcol = S.ui.grapeCollapsed||(S.ui.grapeCollapsed={});
   const cards = S.grapes.map(g=>{
     const gActive = g.active!==false;
+    const collapsed = !!gcol[g.id];
+    const st = grapeStatus(g);
     const alloc = allocMap.get(g.id);
     const usedLbs = alloc?.usedLbs||0;
     const remainLbs = alloc?.remainingLbs??g.pounds;
     const allocList = (alloc?.allocations||[]).filter(a=>a.allocated>0).map(a=>`${a.wineName}: ${Math.round(a.allocated)} lbs`).join(' · ');
     const overcommitted = usedLbs > g.pounds + 0.01;
     const harvest=`${g.harvestStartPeriod||''} ${g.harvestStartMonth||''} – ${g.harvestEndPeriod||''} ${g.harvestEndMonth||''}`.trim();
+    const statusPill=`<span class="status-pill" style="background:${st.bg};color:${st.color}" title="Procurement status — click to change" onclick="event.stopPropagation();cycleGrapeStatus('${g.id}')">${st.icon} ${st.label}</span>`;
     return `<div class="info-card${gActive?'':' dim'}">
-      <div class="info-card-hdr">
+      <div class="info-card-hdr" style="cursor:pointer;${collapsed?'margin-bottom:0;padding-bottom:0;border-bottom:none':''}" onclick="toggleGrapeCollapse('${g.id}')" title="${collapsed?'Expand':'Collapse'}">
+        <span style="flex-shrink:0;color:var(--muted);font-size:11px">${collapsed?'▸':'▾'}</span>
         <span class="badge badge-${g.type}" style="flex-shrink:0">${g.type==='red'?'🔴':'⚪'}</span>
-        <div class="info-card-name">${g.name}${gActive?'':' <span class="card-inactive-tag">INACTIVE</span>'}${g.origin?`<div class="txt-s txt-m" style="font-weight:normal;font-size:11px">${g.origin}</div>`:''}</div>
-        <div class="info-card-acts">
+        <div class="info-card-name">${g.name}${gActive?'':' <span class="card-inactive-tag">INACTIVE</span>'}
+          <div style="font-weight:normal;margin-top:3px">${statusPill}${collapsed?` <span class="txt-s txt-m" style="font-size:11px">· ${g.pounds} lbs</span>`:''}</div>
+          ${!collapsed&&g.origin?`<div class="txt-s txt-m" style="font-weight:normal;font-size:11px;margin-top:2px">${g.origin}</div>`:''}
+        </div>
+        <div class="info-card-acts" onclick="event.stopPropagation()">
           <button class="btn btn-s btn-xs" style="${gActive?'':'background:#e8f5e9;color:#1e8449'}" title="${gActive?'Mark inactive — grapes not guaranteed / not coming':'Mark active'}" onclick="toggleGrapeActive('${g.id}')">${gActive?'⏻':'✓'}</button>
           <button class="btn btn-s btn-xs" onclick="S.ui.editingGrapeId='${g.id}';S.ui.showGrapeForm=false;render()">✏</button>
           <button class="btn btn-d btn-xs" onclick="delGrape('${g.id}')">✕</button>
         </div>
       </div>
+      ${collapsed?'':`
+      <div class="spec-row"><span class="k">Status</span><span class="v">
+        <select class="fc" style="font-size:11px;padding:2px 5px;width:auto;display:inline-block" onchange="setGrapeStatus('${g.id}',this.value)">
+          ${GRAPE_STATUS.map(s=>`<option value="${s.k}" ${s.k===st.k?'selected':''}>${s.icon} ${s.label}</option>`).join('')}
+        </select></span></div>
       <div class="spec-row"><span class="k">Total harvest</span><span class="v">${g.pounds} lbs</span></div>
       <div class="spec-row"><span class="k">Committed</span><span class="v" style="color:${overcommitted?'#c0392b':usedLbs>0?'#1e8449':'var(--muted)'}">${usedLbs>0?Math.round(usedLbs)+' lbs':'—'}</span></div>
       <div class="spec-row"><span class="k">Remaining</span><span class="v" style="color:${overcommitted?'#c0392b':remainLbs<g.pounds*0.1?'#e67e22':'#1e8449'}">${Math.round(remainLbs)} lbs${overcommitted?' ⚠':''}</span></div>
       ${allocList?`<div style="font-size:10px;color:var(--muted);padding:3px 0 1px">→ ${allocList}</div>`:''}
       <div class="spec-row"><span class="k">Lbs / gal</span><span class="v">${g.lbsPerGal}</span></div>
       <div class="spec-row"><span class="k">Target Brix</span><span class="v">${g.targetBrix?g.targetBrix+'°':'—'}</span></div>
-      ${harvest?`<div class="spec-row"><span class="k">Harvest</span><span class="v" style="font-size:11px">${harvest}</span></div>`:''}
+      ${harvest?`<div class="spec-row"><span class="k">Harvest</span><span class="v" style="font-size:11px">${harvest}</span></div>`:''}`}
     </div>`;
   }).join('');
+  const anyOpen=S.grapes.some(g=>!gcol[g.id]);
 
   return `<div class="panel">
     <div class="ph"><div class="pt">🍇 Grape Varieties</div>
-      <button class="btn btn-p btn-sm" onclick="S.ui.showGrapeForm=!S.ui.showGrapeForm;S.ui.editingGrapeId=null;render()">+ Add</button></div>
+      <div class="flex gap4">
+        ${S.grapes.length>1?`<button class="btn btn-s btn-sm" onclick="toggleAllGrapes()">${anyOpen?'⊟ Collapse all':'⊞ Expand all'}</button>`:''}
+        <button class="btn btn-p btn-sm" onclick="S.ui.showGrapeForm=!S.ui.showGrapeForm;S.ui.editingGrapeId=null;render()">+ Add</button></div></div>
     ${editForm}${addForm}
     ${S.grapes.length?`<div class="card-grid">${cards}</div>`
     :`<div class="empty"><div class="empty-icon">🍇</div><p>No grapes yet</p></div>`}
@@ -3077,6 +3095,23 @@ function saveGrapeEdit(id){
 }
 function delGrape(id){ if(!confirm('Remove this grape?')) return; S.grapes=S.grapes.filter(g=>g.id!==id); render(); }
 function toggleGrapeActive(id){ const g=grapeById(id); if(!g) return; g.active=g.active===false; render(); }
+// Procurement status for grapes
+const GRAPE_STATUS=[
+  {k:'planned', label:'Planned',  icon:'💭', color:'#8a8f96', bg:'#eff0f2'},
+  {k:'maybe',   label:'Maybe',    icon:'❓', color:'#b06a00', bg:'#fdf3e0'},
+  {k:'ordered', label:'Ordered',  icon:'📦', color:'#1565c0', bg:'#e8f1fb'},
+  {k:'sourced', label:'Sourced',  icon:'🤝', color:'#6a4fb0', bg:'#efe9f8'},
+  {k:'received',label:'Received',  icon:'✅', color:'#1e8449', bg:'#e7f5ec'},
+];
+function grapeStatus(g){ return GRAPE_STATUS.find(s=>s.k===(g.status||'planned'))||GRAPE_STATUS[0]; }
+function setGrapeStatus(id,val){ const g=grapeById(id); if(!g) return; g.status=val; render(); }
+function cycleGrapeStatus(id){ const g=grapeById(id); if(!g) return;
+  const i=GRAPE_STATUS.findIndex(s=>s.k===(g.status||'planned'));
+  g.status=GRAPE_STATUS[(i+1)%GRAPE_STATUS.length].k; render(); }
+function toggleGrapeCollapse(id){ if(!S.ui.grapeCollapsed) S.ui.grapeCollapsed={}; S.ui.grapeCollapsed[id]=!S.ui.grapeCollapsed[id]; render(); }
+function toggleAllGrapes(){ if(!S.ui.grapeCollapsed) S.ui.grapeCollapsed={};
+  const anyOpen=S.grapes.some(g=>!S.ui.grapeCollapsed[g.id]);
+  S.grapes.forEach(g=>S.ui.grapeCollapsed[g.id]=anyOpen); render(); }
 function toggleWineActive(id){ const w=wineById(id); if(!w) return; w.active=w.active===false; render(); }
 function isGrapeActive(id){ const g=grapeById(id); return !!g&&g.active!==false; }
 
