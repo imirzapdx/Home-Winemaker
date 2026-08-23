@@ -26,6 +26,16 @@ body{font-family:Georgia,'Palatino Linotype',serif;background:var(--bg);color:va
 .panel{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
 .ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--parch)}
 .pt{font-size:15px;font-weight:bold;color:var(--burg)}
+.pt-edit{font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:bold;
+  color:var(--burg);background:transparent;border:1px dashed transparent;border-radius:4px;
+  padding:2px 6px;margin:-2px -6px;width:100%;max-width:400px}
+.pt-edit:hover{border-color:var(--border);background:#fff}
+.pt-edit:focus{border-style:solid;border-color:var(--gold);background:#fff;outline:none}
+.desc-edit{font-size:12px;color:var(--muted);background:transparent;
+  border:1px dashed transparent;border-radius:4px;padding:2px 6px;margin:2px -6px 0;
+  width:100%;max-width:520px;font-family:inherit}
+.desc-edit:hover{border-color:var(--border);background:#fff}
+.desc-edit:focus{border-style:solid;border-color:var(--gold);background:#fff;outline:none;color:var(--text)}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{background:var(--parch);padding:5px 9px;text-align:left;font-weight:bold;color:var(--muted);border-bottom:1px solid var(--border)}
 .tbl td{padding:5px 9px;border-bottom:1px solid rgba(200,184,154,.3);vertical-align:middle}
@@ -4551,7 +4561,11 @@ function renderProtocolsTab(){
         .concat(S.grapes.filter(g=>g.roseProtocolId===p.id).map(g=>g.name+' rosé'));
       return `<div class="info-card">
         <div class="info-card-hdr">
-          <div class="info-card-name">${issueDot(w)} ${esc(p.name)}</div>
+          <div class="info-card-name" style="display:flex;align-items:center;gap:5px;width:100%">
+            ${issueDot(w)}
+            <input class="pt-edit" style="font-size:13px" value="${esc(p.name)}" title="Click to rename"
+              onchange="setProtoField('${p.id}','name',this.value)">
+          </div>
         </div>
         <div class="txt-s txt-m" style="margin:4px 0 6px">${esc(p.desc||'')}</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">${protoBadges(p)}</div>
@@ -4632,8 +4646,14 @@ function renderProtocolDetail(p){
   return `<div>
     <div class="panel">
       <div class="ph">
-        <div><div class="pt">📜 ${esc(p.name)}</div>
-          <div class="txt-s txt-m mt4">${esc(p.desc||'')}${p.source?` <i>· ${esc(p.source)}</i>`:''}</div></div>
+        <div style="flex:1;min-width:0">
+          <div class="flex fai gap4"><span style="font-size:15px">📜</span>
+            <input class="pt-edit" id="proto-name" value="${esc(p.name)}" placeholder="Protocol name"
+              title="Click to rename" onchange="setProtoField('${p.id}','name',this.value)"></div>
+          <input class="desc-edit" id="proto-desc" value="${esc(p.desc||'')}" placeholder="One line on what this protocol is for…"
+            title="Click to edit" onchange="setProtoField('${p.id}','desc',this.value)">
+          ${p.source?`<div class="txt-s txt-m mt4" style="font-size:11px"><i>Rates from ${esc(p.source)}</i></div>`:''}
+        </div>
         <div class="flex gap8">
           ${p.builtin&&p.edited?`<button class="btn btn-d btn-sm" onclick="resetProtocolEdit('${p.id}')">Reset to default</button>`:''}
           <button class="btn btn-s btn-sm" onclick="S.ui.protocolId=null;render()">← All protocols</button>
@@ -4657,8 +4677,9 @@ function renderProtocolDetail(p){
     <div class="panel" style="margin-top:12px">
       <div class="ph"><div class="pt">🔧 Method</div></div>
       <div class="g3">
-        <div class="fg"><label class="lbl">Name</label>
-          <input class="fc" value="${esc(p.name)}" onchange="setProtoField('${p.id}','name',this.value)"></div>
+        <div class="fg"><label class="lbl">ML nutrient</label>
+          <select class="fc" ${p.mlf.mode==='none'?'disabled':''} onchange="setProtoField('${p.id}','mlf.nutrient',this.value)">
+            ${['ML nutrient (Opti-Malo)','Acti-ML',''].map(v=>`<option value="${esc(v)}" ${(p.mlf.nutrient||'')===v?'selected':''}>${v||'— none —'}</option>`).join('')}</select></div>
         <div class="fg"><label class="lbl">Wine color</label>
           <select class="fc" onchange="setProtoField('${p.id}','color',this.value)">
             ${['red','white','rose'].map(c=>`<option value="${c}" ${p.color===c?'selected':''}>${c==='rose'?'Rosé':c[0].toUpperCase()+c.slice(1)}</option>`).join('')}</select></div>
@@ -4720,10 +4741,15 @@ function renderProtocolDetail(p){
 function openProtocol(id){ S.ui.protocolId=id; S.ui.tab='protocols'; syncTabButtons(); render(); }
 function setProtoField(id,path,val){
   const p=protoEditable(id); if(!p) return;
-  if(val==='true') val=true; else if(val==='false') val=false;
-  if(path==='ferment.coldSoakDays') val=Math.max(0,+val||0);
-  if(path==='ferment.bioprotection'&&val==='') val=null;
-  if(path==='mlf.culture'&&val==='') val=null;
+  if(path==='name'){ val=String(val||'').trim()||'Untitled protocol'; }
+  else if(path==='desc'){ val=String(val||'').trim(); }
+  else {
+    if(val==='true') val=true; else if(val==='false') val=false;
+    if(path==='ferment.coldSoakDays') val=Math.max(0,+val||0);
+    if(path==='ferment.bioprotection'&&val==='') val=null;
+    if(path==='mlf.culture'&&val==='') val=null;
+    if(path==='mlf.nutrient'&&val==='') val=null;
+  }
   const [a,b]=path.split('.');
   if(b){ p[a]=p[a]||{}; p[a][b]=val; } else p[a]=val;
   if(path==='mlf.mode'&&val==='none'){ p.mlf.culture=null; p.mlf.nutrient=null; }

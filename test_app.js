@@ -784,6 +784,85 @@ t('the arithmetic matches a hand calculation', () => {
        (cab.mustGal + merlot.mustGal) * A.LOSS.pToS, 0.05);
 });
 
+t('protocol names are editable from the detail view and the list card', () => {
+  reset();
+  A.S.ui.tab = 'protocols';
+  const list = A.renderTab();
+  ok((list.match(/setProtoField\('[^']+','name'/g) || []).length >= 10,
+     'list cards should each carry a rename input');
+  A.S.ui.protocolId = 'red-classic-ml';
+  const detail = A.renderTab();
+  ok(detail.includes('id="proto-name"'), 'no name input in the header');
+  ok(detail.includes("setProtoField('red-classic-ml','name'"), 'name input not wired');
+  ok(detail.includes('id="proto-desc"'), 'description not editable');
+  A.S.ui.protocolId = null; A.S.ui.tab = 'wines';
+});
+t('renaming a builtin sticks, propagates, and resets', () => {
+  reset();
+  A.setProtoField('red-classic-ml', 'name', '  Iurie House Red  ');
+  eq(A.getProtocol('red-classic-ml').name, 'Iurie House Red', 'not trimmed/saved');
+  eq(A.PROTOCOL_PRESETS.find(x => x.id === 'red-classic-ml').name,
+     'Red — Classic, consecutive MLF', 'the shipped preset was mutated');
+  S().grapes[0].protocolId = 'red-classic-ml';
+  A.S.ui.tab = 'grapes';
+  ok(A.renderTab().includes('Iurie House Red'), 'new name not showing on the grape card');
+  A.S.ui.tab = 'wines';
+  A.resetProtocolEdit('red-classic-ml');
+  eq(A.getProtocol('red-classic-ml').name, 'Red — Classic, consecutive MLF');
+  reset();
+});
+t('an emptied name falls back instead of going blank', () => {
+  reset();
+  A.setProtoField('red-native', 'name', '   ');
+  eq(A.getProtocol('red-native').name, 'Untitled protocol');
+  reset();
+});
+t('a protocol named "true" stays a string', () => {
+  reset();
+  A.setProtoField('red-native', 'name', 'true');
+  eq(A.getProtocol('red-native').name, 'true');
+  A.setProtoField('red-native', 'desc', 'false');
+  eq(A.getProtocol('red-native').desc, 'false');
+  reset();
+});
+t('custom protocols rename too, and the name survives a save/load', () => {
+  reset();
+  A.newProtocol();
+  const id = S().protocols[0].id;
+  A.setProtoField(id, 'name', 'Carbonic Gamay');
+  eq(A.getProtocol(id).name, 'Carbonic Gamay');
+  const prof = JSON.parse(JSON.stringify(A.stateToProfile('T', 'pT')));
+  S().protocols = [];
+  A.loadProfileIntoState(prof);
+  eq(A.getProtocol(id).name, 'Carbonic Gamay', 'rename lost on reload');
+  reset();
+});
+t('a renamed protocol with an apostrophe does not break its own input', () => {
+  reset();
+  A.setProtoField('red-native', 'name', "Ken's Native Red");
+  A.S.ui.tab = 'protocols'; A.S.ui.protocolId = 'red-native';
+  const html = A.renderTab();
+  ok(html.includes('Ken&#39;s Native Red'), 'apostrophe not escaped in the value');
+  const bad = [];
+  html.replace(/\son(?:click|change)="([^"]*)"/g, (m, code) => {
+    if ((code.match(/'/g) || []).length % 2 !== 0) bad.push(code.slice(0, 70));
+    return m;
+  });
+  ok(bad.length === 0, 'apostrophe broke a handler: ' + bad.slice(0, 2).join(' | '));
+  A.S.ui.protocolId = null; A.S.ui.tab = 'wines';
+  reset();
+});
+t('ML nutrient is now editable', () => {
+  reset();
+  A.setProtoField('red-classic-ml', 'mlf.nutrient', 'Acti-ML');
+  eq(A.getProtocol('red-classic-ml').mlf.nutrient, 'Acti-ML');
+  A.setProtoField('red-classic-ml', 'mlf.nutrient', '');
+  eq(A.getProtocol('red-classic-ml').mlf.nutrient, null);
+  ok(A.checkProtocol(A.getProtocol('red-classic-ml'), {}).some(i => i.code === 'MLF_NO_NUTRIENT'),
+     'dropping the nutrient should raise a note');
+  reset();
+});
+
 console.log('');
 failures.forEach(f => console.log('  FAIL  ' + f));
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
