@@ -1,173 +1,129 @@
-# Protocols build — what changed
+# Build notes — products, volumes, calculators
 
-Base: `winemaking_planner_8_15.html` (3,670 lines) → `index.html` (4,875 lines).
-Nothing was removed. Every existing tab, panel and function is still there.
-
----
-
-## 1. Protocols — a new tab
-
-Sits between **Grapes** and **Tracking**: fruit → method → schedule.
-
-It's not inside Supplies because Wine Projects, Tracking, Flowchart *and*
-Supplies all read from it. Supplies is downstream — it consumes protocol data to
-cost out the season. Making it the parent would mean editing a method from a
-shopping page.
-
-**Ten presets**, all editable, all resettable:
-
-| | Red | White / Orange | Rosé |
-|---|---|---|---|
-| | Classic, consecutive MLF | Aromatic, no MLF | Saignée, no MLF |
-| | Co-inoculated MLF | Barrel ferment, full MLF | Direct press, no MLF |
-| | Native yeast, native MLF | Orange skin-contact, native | |
-| | Biodiva bioprotection → Sacch | Minimal, nutrients only | |
-
-Each carries a method block (yeast strategy, bioprotection strain, cold soak,
-press point, MLF mode and culture, cold stabilization, filtration), an
-**addition schedule** with rates and a basis, and an ordered **step checklist**
-that shows up on the batch in Tracking.
-
-Red and White rates come straight from your scanned MoreWine checklists —
-0.33 g/gal SO₂, Lallzyme EX at 0.1, Opti-Red/Opti-White at 1.0, FT Rouge at 1.3
-(0.8–1.9), FT Blanc Soft at 0.5 (0.2–0.6), and the 8-hour enzyme-before-tannin
-rule enforced by the compatibility checker. Ken's handwritten note is in there
-too: 7 g/gal oak chips at crush, American untoasted first, flagged optional so
-it stays out of the shopping list unless you switch optional additions on.
-
-Builtins use the same override layer as your yeasts — `S.protocolEdits[id]`
-holds a full copy, the shipped preset is never mutated, Reset restores it.
-Duplicate any protocol to start a custom one; that's a better starting point
-than blank.
-
-**Assignment is per grape**, which is what "each varietal done a different way"
-means. Rosé bleeds get their own protocol, since a saignée off a Cabernet must
-isn't made like the Cabernet. You can set it from the Protocols tab table, the
-Grapes card, the wine detail, or the batch in Tracking — all four write to the
-same place.
-
-## 2. Secondary is now optional
-
-One rule drives it: a secondary vessel exists so something can happen to the
-wine in bulk after the primary and before aging. In practice that's a
-consecutive MLF. Co-inoculated MLF finishes with the primary; no MLF means press
-straight into the aging vessel.
-
-This is not cosmetic — **it changes the yield math.** Skipping the secondary
-skips one racking, so `chainFor()` returns `sToA: 1` instead of `0.95`. A wine
-with no secondary needs about 5% less fruit to fill the same barrel. The
-allocation engine computes this **per component**, so a blend can mix a
-co-inoculated Cabernet with a consecutive-MLF Merlot and the fruit demand is
-right for each.
-
-Where it shows up:
-
-- **Wine Projects** — the Secondary Fermenter dropdown becomes "⏭ Not needed —
-  press straight to aging", with the reason on hover.
-- **Tracking** — the stepper goes primary → aging. ML settings follow the
-  protocol until you override them on a batch, and a "↩ Follow protocol" button
-  hands control back.
-- **Flowchart** — a dashed hollow pass-through marker in the secondary row
-  instead of a vessel, with a new legend entry.
-- **Blend Lab** — `blendSplitStage()` reports whether components merge after
-  primary or after secondary.
-
-There's an override at the protocol level: Auto / Always / Never.
-
-## 3. Compatibility checking
-
-20 rules, each returning what's wrong *and* what to do. Errors are red, risks
-amber, notes grey. They run live on the Protocols tab, on each wine in Wine
-Projects, and on each batch in Tracking.
-
-The ones worth naming:
-
-- **Biodiva cancelled by SO₂** — bioprotection is doing the job SO₂ would do;
-  running both is self-defeating. Hard conflict.
-- **Killer yeast versus bioprotection** — EC-1118 and K1-V1116 will destroy
-  Biodiva before it contributes anything. Hard conflict.
-- **Bioprotection with nothing to follow it** — T. delbrueckii stalls around
-  8–10% and can't finish alone.
-- **Lysozyme or sorbate with MLF** — one kills the bacteria, the other makes
-  geranium taint that can't be removed.
-- **Enzyme and tannin in the same stage** — the tannin neutralizes the enzyme.
-  This is the 8-hour rule from your checklists, enforced structurally.
-- **DAP during a co-inoculated ferment** — nitrogen spikes inhibit MLB.
-- **SO₂-producing yeast on co-inoculation** — EC-1118, K1-V1116, Premier Blanc.
-- **71B with a planned MLF** — it eats some of the malic you were counting on.
-- **MLF below pH 3.1, above 15% potential alcohol, or under 60°F.**
-- **Cold stabilizing before MLF is confirmed finished** — it restarts in bottle.
-- **A red with no MLF** — refermentation risk unless you hold SO₂ and sterile
-  filter.
-- Plus bentonite-versus-enzyme, bentonite-versus-tannin, missing nutrient,
-  filtering without cold stabilizing, yeast alcohol tolerance, and rosé-with-MLF.
-
-Strain traits (killer, SO₂ producer, malic consumer) live in a separate
-`YEAST_TRAITS` map so the yeast editor's save path can't drop them.
-
-## 4. Shopping list with purchase checkmarks
-
-New panel in Supplies, appended below the existing planning content — the
-"Yeast Needed by Strain" and "Chemicals Logged in Tracking" panels are
-untouched, and the equipment and yeast library panels below them are intact.
-
-Every batch contributes its protocol's addition schedule, scaled by that
-batch's volume (`per gal must` = pre-press, `per gal wine` = post-press),
-totalled by product across the whole season. Yeast, ML cultures and
-bioprotection strains are in the same table.
-
-- Purchase checkbox per row, keyed stably (`SO₂|Potassium Metabisulfite (KMS)`)
-  so ticks survive recalculation when you change a plan.
-- The existing yeast-by-strain table got the same checkbox column.
-- Adjustable safety margin (default 10%) and an optional-additions toggle.
-- Suggested pack sizes from a product catalog.
-- **Export CSV** — one row per item, with what it's for and whether you have it.
-
-For the default cellar that produces, among others: FT Rouge 67.5 g,
-Go-Ferm Protect 76.62 g, KMS 35.34 g, VP41 for 44.13 gal (1 × 66-gal sachet).
-
----
-
-## Testing
-
-`test_app.js` — **99 tests, all passing.** Run:
+4,901 → 5,484 lines. **145 tests passing.** Run with:
 
 ```
 python3 build_harness.py && node test_app.js
 ```
 
-The harness runs the real script block from `index.html` in a Node VM with DOM
-stubs, so it tests the shipped file rather than a copy.
-`build_harness.py` extracts the script and appends an export epilogue, because
-`let`/`const` bindings stay in a VM script's lexical scope otherwise.
+---
 
-Coverage: every tab renders, all ten protocol detail views render, preset
-structural integrity, the two PDF checklists reproduced faithfully,
-enzyme-before-tannin ordering across all presets, the override/reset layer,
-secondary derivation for every preset plus overrides, the yield-math change
-(verified to be exactly one racking loss), mixed-protocol blend allocation
-without overcommitting, tracking stage advance on a no-secondary batch, all 20
-compatibility rules, chemical aggregation checked against hand arithmetic, pack
-sizing, purchase flags surviving plan changes, CSV escaping, profile round-trip
-persistence, legacy-profile migration, every inline handler resolving to a real
-function, and no rendered handler attribute broken by a stray quote.
+## 1. Products are editable
 
-That last one caught a real bug: `JSON.stringify` in an `onchange` attribute
-emitted double quotes that terminated the attribute early. Fixed with a `jsStr()`
-helper that escapes ahead of the HTML entity.
+`CHEM_CATALOG` is now the shipped floor, not the ceiling. A new **Product
+Library** panel at the bottom of the Protocols tab lets you add anything you
+actually stock — name, category, unit, pack sizes, notes.
+
+The category is not decoration. It feeds the compatibility engine and the
+shopping list, so a product you file as **Tannin** picks up the 8-hour enzyme
+rule, and one filed as **Nutrient** satisfies the nitrogen check. Pack sizes
+drive the "suggested pack" column.
+
+Three things worth knowing:
+
+- **Renaming follows through.** Change a product's name and every protocol
+  addition that used it is rewritten, and the purchase checkmark moves to the
+  new key. A rename never silently orphans a line on the shopping list.
+- **Deleting is safe.** If a protocol still references a deleted product, it
+  keeps working — the item still totals up, just filed under "Other" with no
+  pack size. The library flags these as orphans so you can re-add them.
+- **The addition dropdown is now grouped by category**, with custom entries
+  marked ✎, and it keeps an orphaned selection selectable rather than silently
+  switching it to something else.
+
+## 2. Actual weights and volumes in Tracking
+
+New **📏 Actual Weights & Volumes** section, sitting directly under the batch
+header — above the protocol, as the first thing you see.
+
+Two headline figures: **fruit on the scale** and **must in the fermenter**, each
+showing the planned number and the percentage you're off it. Enter both and the
+panel computes your **measured extraction rate** in lbs/gal, with a one-click
+link to write it back to the grape so future planning uses the number this fruit
+actually gave rather than the estimate.
+
+Below that, a **volume log** — a dated row per measurement, with an event type
+(off gross lees, racking, after MLF, cold stabilization, fining, filtration,
+topping, into barrel, at bottling) and a note. Each row shows the change from
+the previous reading in both gallons and percent, and the panel totals the loss
+from must to your latest reading.
+
+The important part is what it feeds. Once a measured must volume exists it
+replaces the planned figure **everywhere downstream** — the stepper's stage
+volumes, the protocol addition doses on that batch, and the Supplies shopping
+list. The doses you're handed are for the wine you actually have. The batch
+header and the tracking card both mark when a volume is measured rather than
+estimated.
+
+## 3. Calculators tab
+
+Eight bench calculations, between Tracking and Supplies. Every one shows its
+working, and inputs persist so switching tabs doesn't lose your place.
+
+| | |
+|---|---|
+| **SO₂ addition** | Molecular target by pH, not just free SO₂. Includes a pH sensitivity table. |
+| **Chaptalization** | Sugar to raise Brix, as a mass balance. |
+| **Water addition** | Water to lower Brix, with the TA dilution warning. |
+| **Acid addition** | Tartaric to raise TA. |
+| **Deacidification** | Potassium bicarbonate or chalk, with the pH shift and a warning past 2 g/L. |
+| **ABV** | From gravity or Brix, plus the ×0.55 field estimate. |
+| **Blending** | Pearson square, with a note that it does not work for pH. |
+| **Yield** | Fruit to bottles through the app's own loss chain. |
+
+The SO₂ one earns its place. Free SO₂ alone tells you almost nothing — at pH 3.8
+you need roughly four times the free SO₂ you'd need at pH 3.2 for the same
+protection. The calculator works backward from a molecular target (0.5 ppm reds,
+0.8 whites) to the free SO₂ you need, then to grams of KMS.
+
+### Math verification
+
+Every formula is checked against an independent reference, not just against
+itself:
+
+- **KMS**: 50 ppm into 5 gallons → 1.64 g. The MoreWine sheet says 1.6 g, and
+  0.33 g/gal. Matches.
+- **Brix → SG**: within 0.0002 of published tables from 0 to 26 Brix.
+- **Chaptalization**: 1 lb of sugar into 1 gallon of water gives 10.71 Brix by
+  first principles. The calculator agrees to within 6 g.
+- **Dilution**: verified by confirming sugar mass is conserved.
+- **Tartaric**: 3.785 g/gal per 1 g/L — exactly 1 g/L, since a gallon is
+  3.785 L.
+- **ABV**: (1.095 − 0.995) × 131.25 = 13.13%.
+- **Pearson**: 24 and 19 to a target of 22 gives 60/40.
+
+One real bug surfaced here. The first `brixToSG` was a fitted polynomial while
+`sgToBrix` was the standard cubic, and the two drifted about 0.15 Brix apart on
+a round trip. `brixToSG` is now the numeric inverse of the cubic, so the two
+directions can't disagree.
 
 ---
 
-## One thing to fix on your side
+## Test coverage added
 
-The project-knowledge files (`wm_part1.txt`–`wm_part5.txt`,
-`winemaking_planner.html`) are still the old three-tab build — 1,657 lines with
-none of `calcGrapeAllocations`, `grapeRatio`, `migrateState`, `YEAST_DEFAULTS`
-or `builtinYeasts`. Replace them with this `index.html` so the next session
-doesn't start from the wrong file.
+44 new tests on top of the existing 101.
 
-## Verify before crush
+**Products** — catalog merging, name collision on add, pack-size parsing and
+sorting, a custom product reaching the shopping list with its own category and
+pack, a custom Tannin triggering the enzyme rule, a custom Nutrient satisfying
+the nitrogen check, rename propagating through builtin edits and custom
+protocols and purchase flags, rename onto an existing name being refused, delete
+leaving the protocol readable, orphan detection, orphans staying selectable in
+the dropdown, profile round-trip.
 
-Every rate is a planning starting point from the MoreWine checklists and
-standard Lallemand / Scott Labs labels. Manufacturers revise them. Check the
-current product label — the app should never be the authority on a dosage.
+**Volumes** — empty ledger on a fresh record, measured must overriding planned
+and falling back when cleared, negative values rejected, extraction rate needing
+both figures, writing the rate back to the grape, measured volume changing doses
+by exactly the extra gallons, stepper volumes following, log CRUD, running loss
+percentages, panel ordering above the protocol section, the header "measured"
+flag, profile round-trip, legacy record migration.
+
+**Calculators** — all eight formulas against the reference values above, the
+Brix/SG round trip at seven points, the tab rendering every card, inputs having
+ids so focus survives the re-render, persistence and reset, and a robustness
+sweep feeding blank, negative and non-numeric values into every field.
+
+---
+
+Rates and constants are still planning figures. Bench trial anything going into
+a batch you care about, and check the current product label before crush.

@@ -75,6 +75,7 @@ const PRISTINE = JSON.stringify({
   customYeasts: A.S.customYeasts, svEquipment: A.S.svEquipment,
 });
 const reset = () => {
+  A.S.customProducts = {}; A.S.ui.calc = {};
   const p = JSON.parse(PRISTINE);
   A.S.equipment = p.equipment; A.S.grapes = p.grapes; A.S.wines = p.wines;
   A.S.customYeasts = p.customYeasts; A.S.svEquipment = p.svEquipment;
@@ -92,7 +93,7 @@ reset();
 t('app boots with default state', () => { ok(S().wines.length === 2); ok(S().grapes.length === 3); });
 t('migrateState is idempotent', () => { A.migrateState(); A.migrateState(); eq(S().protocols, []); });
 t('every tab renders without throwing', () => {
-  ['wines', 'grapes', 'protocols', 'tracking', 'supplies', 'flowchart'].forEach(tab => {
+  ['wines', 'grapes', 'protocols', 'tracking', 'calculators', 'supplies', 'flowchart'].forEach(tab => {
     A.S.ui.tab = tab;
     const html = A.renderTab();
     ok(typeof html === 'string' && html.length > 50, tab + ' produced no markup');
@@ -694,7 +695,7 @@ t('every inline handler referenced in markup actually exists', () => {
   reset();
   A.S.ui.trackKey = null;
   const htmls = [];
-  ['wines', 'grapes', 'protocols', 'tracking', 'supplies', 'flowchart'].forEach(tab => {
+  ['wines', 'grapes', 'protocols', 'tracking', 'calculators', 'supplies', 'flowchart'].forEach(tab => {
     A.S.ui.tab = tab; htmls.push(A.renderTab());
   });
   A.protocolLibrary().forEach(p => { A.S.ui.tab = 'protocols'; A.S.ui.protocolId = p.id; htmls.push(A.renderTab()); });
@@ -723,7 +724,7 @@ t('every inline handler referenced in markup actually exists', () => {
 t('no rendered handler attribute is broken by a stray quote', () => {
   reset();
   const htmls = [];
-  ['wines','grapes','protocols','tracking','supplies','flowchart'].forEach(tab => { A.S.ui.tab = tab; htmls.push(A.renderTab()); });
+  ['wines','grapes','protocols','tracking','calculators','supplies','flowchart'].forEach(tab => { A.S.ui.tab = tab; htmls.push(A.renderTab()); });
   A.protocolLibrary().forEach(p => { A.S.ui.tab='protocols'; A.S.ui.protocolId=p.id; htmls.push(A.renderTab()); });
   A.S.ui.protocolId=null; A.S.ui.tab='wines';
   const bad = [];
@@ -860,6 +861,408 @@ t('ML nutrient is now editable', () => {
   eq(A.getProtocol('red-classic-ml').mlf.nutrient, null);
   ok(A.checkProtocol(A.getProtocol('red-classic-ml'), {}).some(i => i.code === 'MLF_NO_NUTRIENT'),
      'dropping the nutrient should raise a note');
+  reset();
+});
+
+
+/* ══════════════════════════════════════════════════════════
+   Editable product library
+   ══════════════════════════════════════════════════════════ */
+t('the catalog merges built-ins with custom products', () => {
+  reset();
+  const builtin = Object.keys(A.CHEM_CATALOG).length;
+  eq(Object.keys(A.productCatalog()).length, builtin);
+  A.addCustomProduct();
+  eq(Object.keys(A.productCatalog()).length, builtin + 1);
+  ok(A.isCustomProduct('New product'));
+  ok(!A.isCustomProduct('Fermaid K'), 'a built-in should never read as custom');
+  reset();
+});
+t('adding twice does not collide on the name', () => {
+  reset();
+  A.addCustomProduct(); A.addCustomProduct(); A.addCustomProduct();
+  eq(Object.keys(S().customProducts).sort(), ['New product', 'New product 2', 'New product 3']);
+  reset();
+});
+t('product fields are editable, and pack sizes parse', () => {
+  reset();
+  A.addCustomProduct();
+  A.setProductField('New product', 'cat', 'Tannin');
+  A.setProductField('New product', 'unit', 'mL');
+  A.setProductField('New product', 'note', 'From the Croatian co-op');
+  A.setProductField('New product', 'packs', ' 500, 100 , 25 ');
+  const p = A.productInfo('New product');
+  eq(p.cat, 'Tannin'); eq(p.unit, 'mL');
+  eq(p.packs, [25, 100, 500], 'packs should be parsed, cleaned and sorted');
+  eq(p.note, 'From the Croatian co-op');
+  A.setProductField('New product', 'packs', 'nonsense');
+  eq(A.productInfo('New product').packs, null);
+  reset();
+});
+t('a custom product can be used in a protocol and reaches the shopping list', () => {
+  reset();
+  if (!S().customProducts) S().customProducts = {};
+  S().customProducts['Vitiferm Extract'] = { cat: 'Enhancer', unit: 'g', packs: [250], note: 'House blend', custom: true };
+  const p = A.protoEditable('red-classic-ml');
+  p.additions.push({ stage: 'crush', product: 'Vitiferm Extract', rate: 2, basis: 'gal_must', note: '' });
+  const row = A.calcProtocolChemicals().find(r => r.product === 'Vitiferm Extract');
+  ok(row, 'custom product missing from the shopping list');
+  eq(row.cat, 'Enhancer', 'category not picked up from the custom entry');
+  eq(row.unit, 'g');
+  eq(row.note, 'House blend');
+  ok(/250/.test(row.pack), 'custom pack size not used: ' + row.pack);
+  reset();
+});
+t('a custom product filed as Tannin gets the 8-hour enzyme rule', () => {
+  reset();
+  S().customProducts = { 'Cellar Tannin X': { cat: 'Tannin', unit: 'g', packs: [100], note: '', custom: true } };
+  const p = A.protoEditable('red-classic-ml');
+  p.additions.push({ stage: 'crush', product: 'Cellar Tannin X', rate: 1, basis: 'gal_must' });
+  ok(A.checkProtocol(A.getProtocol('red-classic-ml'), {}).some(i => i.code === 'ENZYME_TANNIN_STAGE'),
+     'the compatibility engine ignored a custom tannin');
+  reset();
+});
+t('a custom product filed as Nutrient satisfies the nitrogen check', () => {
+  reset();
+  S().customProducts = { 'Homebrew Nutrient': { cat: 'Nutrient', unit: 'g', packs: [100], note: '', custom: true } };
+  const p = A.protoEditable('red-classic-ml');
+  p.additions = p.additions.filter(a => !/Fermaid/.test(a.product));
+  ok(A.checkProtocol(A.getProtocol('red-classic-ml'), {}).some(i => i.code === 'NO_NUTRIENT'));
+  p.additions.push({ stage: 'ferment', product: 'Homebrew Nutrient', rate: 1, basis: 'gal_must' });
+  ok(!A.checkProtocol(A.getProtocol('red-classic-ml'), {}).some(i => i.code === 'NO_NUTRIENT'),
+     'a custom nutrient should count');
+  reset();
+});
+t('renaming a product follows through protocols and purchase flags', () => {
+  reset();
+  S().customProducts = { 'Old Name': { cat: 'Fining', unit: 'g', packs: [100], note: '', custom: true } };
+  const p = A.protoEditable('red-classic-ml');
+  p.additions.push({ stage: 'aging', product: 'Old Name', rate: 1, basis: 'gal_wine' });
+  A.newProtocol();
+  S().protocols[0].additions.push({ stage: 'aging', product: 'Old Name', rate: 1, basis: 'gal_wine' });
+  A.togglePurchased('Fining|Old Name');
+  A.setProductField('Old Name', 'name', 'New Name');
+  ok(!S().customProducts['Old Name'], 'old key left behind');
+  ok(S().customProducts['New Name'], 'renamed product missing');
+  ok(A.getProtocol('red-classic-ml').additions.some(a => a.product === 'New Name'), 'builtin edit not followed');
+  ok(S().protocols[0].additions.some(a => a.product === 'New Name'), 'custom protocol not followed');
+  eq(S().purchased['Fining|New Name'], true, 'purchase flag not carried across');
+  ok(!('Fining|Old Name' in S().purchased), 'stale purchase key left behind');
+  reset();
+});
+t('renaming onto an existing name is refused', () => {
+  reset();
+  S().customProducts = { 'Mine': { cat: 'Other', unit: 'g', packs: null, note: '', custom: true } };
+  A.setProductField('Mine', 'name', 'Fermaid K');
+  ok(S().customProducts['Mine'], 'the rename should have been rejected');
+  reset();
+});
+t('deleting a product leaves the protocol readable', () => {
+  reset();
+  S().customProducts = { 'Doomed': { cat: 'Fining', unit: 'g', packs: [100], note: '', custom: true } };
+  A.protoEditable('red-classic-ml').additions.push({ stage: 'aging', product: 'Doomed', rate: 1, basis: 'gal_wine' });
+  A.delCustomProduct('Doomed');
+  eq(A.productInfo('Doomed').cat, 'Other', 'an unknown product should fall back, not throw');
+  const row = A.calcProtocolChemicals().find(r => r.product === 'Doomed');
+  ok(row && row.cat === 'Other', 'orphaned product should still total up');
+  eq(row.pack, '', 'no pack sizes for an orphan');
+  reset();
+});
+t('the product library panel renders and flags orphans', () => {
+  reset();
+  A.S.ui.tab = 'protocols'; A.S.ui.protocolId = null;
+  ok(A.renderTab().includes('Product Library'));
+  A.protoEditable('red-native').additions.push({ stage: 'aging', product: 'Ghost Product', rate: 1, basis: 'gal_wine' });
+  ok(A.renderTab().includes('Ghost Product'), 'orphan not surfaced');
+  A.S.ui.tab = 'wines';
+  reset();
+});
+t('the product dropdown keeps an orphaned selection selectable', () => {
+  reset();
+  A.protoEditable('red-native').additions.push({ stage: 'aging', product: 'Ghost Product', rate: 1, basis: 'gal_wine' });
+  A.S.ui.tab = 'protocols'; A.S.ui.protocolId = 'red-native';
+  const html = A.renderTab();
+  ok(html.includes('Ghost Product'), 'orphan dropped from the dropdown');
+  ok(html.includes('<optgroup'), 'dropdown should be grouped by category');
+  A.S.ui.protocolId = null; A.S.ui.tab = 'wines';
+  reset();
+});
+t('custom products persist through a profile round-trip', () => {
+  reset();
+  S().customProducts = { 'Kept': { cat: 'Oak', unit: 'g', packs: [454], note: 'n', custom: true } };
+  const prof = JSON.parse(JSON.stringify(A.stateToProfile('T', 'pT')));
+  S().customProducts = {};
+  A.loadProfileIntoState(prof);
+  eq(A.productInfo('Kept').cat, 'Oak');
+  reset();
+});
+
+/* ══════════════════════════════════════════════════════════
+   Actual weights and volumes
+   ══════════════════════════════════════════════════════════ */
+const aLine = () => A.getTrackingLines().find(l => !l.isRose);
+
+t('a fresh record has an empty volume ledger', () => {
+  reset();
+  const rec = A.trackingRec(aLine().key);
+  eq(rec.volumes, { fruitLbs: null, mustGal: null });
+  eq(rec.volumeLog, []);
+});
+t('measured must overrides the planned volume', () => {
+  reset();
+  const line = aLine();
+  const rec = A.trackingRec(line.key);
+  eq(A.actualMust(rec, line), line.mustGal, 'should fall back to planned');
+  A.setRecVolume(line.key, 'mustGal', '42.5');
+  eq(A.actualMust(A.trackingRec(line.key), line), 42.5);
+  A.setRecVolume(line.key, 'mustGal', '');
+  eq(A.actualMust(A.trackingRec(line.key), line), line.mustGal, 'clearing should fall back');
+  A.setRecVolume(line.key, 'mustGal', '-5');
+  eq(A.actualMust(A.trackingRec(line.key), line), line.mustGal, 'a negative volume is not a measurement');
+  reset();
+});
+t('measured extraction rate is computed, and only when both figures exist', () => {
+  reset();
+  const line = aLine();
+  eq(A.measuredYield(A.trackingRec(line.key)), null);
+  A.setRecVolume(line.key, 'fruitLbs', '600');
+  eq(A.measuredYield(A.trackingRec(line.key)), null, 'weight alone is not a rate');
+  A.setRecVolume(line.key, 'mustGal', '40');
+  near(A.measuredYield(A.trackingRec(line.key)), 15);
+  reset();
+});
+t('the measured rate can be pushed back onto the grape', () => {
+  reset();
+  const line = aLine();
+  A.setRecVolume(line.key, 'fruitLbs', '600');
+  A.setRecVolume(line.key, 'mustGal', '40');
+  A.applyMeasuredYield(line.key, line.grapeId);
+  eq(A.grapeById(line.grapeId).lbsPerGal, 15);
+  reset();
+});
+t('measured volume drives the addition doses and the shopping list', () => {
+  reset();
+  const line = aLine();
+  const before = A.calcProtocolChemicals().find(r => r.product === 'Opti-Red').total;
+  A.setRecVolume(line.key, 'mustGal', String(line.mustGal * 2));
+  const after = A.calcProtocolChemicals().find(r => r.product === 'Opti-Red').total;
+  ok(after > before, 'a bigger measured must should need more product');
+  near(after - before, line.mustGal, 0.1, 'the extra should be exactly the extra gallons at 1 g/gal');
+  reset();
+});
+t('measured volume drives the stage volumes shown in the stepper', () => {
+  reset();
+  const line = aLine();
+  A.setRecVolume(line.key, 'mustGal', '100');
+  const rec = A.trackingRec(line.key);
+  near(A.stageVolumes(A.actualMust(rec, line), true).secondary, 85);
+  reset();
+});
+t('volume log entries add, edit and delete', () => {
+  reset();
+  const line = aLine();
+  A.addVolumeEntry(line.key);
+  const rec = A.trackingRec(line.key);
+  eq(rec.volumeLog.length, 1);
+  const id = rec.volumeLog[0].id;
+  eq(rec.volumeLog[0].event, 'racking');
+  A.setVolumeEntry(line.key, id, 'event', 'grosslees');
+  A.setVolumeEntry(line.key, id, 'gal', '38.2');
+  A.setVolumeEntry(line.key, id, 'note', 'heavy lees');
+  eq(rec.volumeLog[0].event, 'grosslees');
+  eq(rec.volumeLog[0].gal, '38.2');
+  eq(rec.volumeLog[0].note, 'heavy lees');
+  A.delVolumeEntry(line.key, id);
+  eq(rec.volumeLog.length, 0);
+  reset();
+});
+t('the ledger tracks running losses down the log', () => {
+  reset();
+  const line = aLine();
+  A.setRecVolume(line.key, 'mustGal', '50');
+  A.addVolumeEntry(line.key);
+  const rec = A.trackingRec(line.key);
+  A.setVolumeEntry(line.key, rec.volumeLog[0].id, 'gal', '42');
+  A.setVolumeEntry(line.key, rec.volumeLog[0].id, 'date', '2026-09-20');
+  A.addVolumeEntry(line.key);
+  A.setVolumeEntry(line.key, rec.volumeLog[1].id, 'gal', '40');
+  A.setVolumeEntry(line.key, rec.volumeLog[1].id, 'date', '2026-10-15');
+  eq(A.latestVolume(rec), 40);
+  const html = A.trkVolumePanel(line, rec);
+  ok(html.includes('-16.0%'), 'first racking loss not shown');
+  ok(html.includes('-20.0%'), 'total loss from must not shown');
+  reset();
+});
+t('the volume panel renders and sits above the protocol section', () => {
+  reset();
+  const line = aLine();
+  A.startTracking(line.key);
+  const html = A.renderTrackingDetail(line);
+  ok(html.includes('Actual Weights &amp; Volumes') || html.includes('Actual Weights & Volumes'));
+  ok(html.indexOf('Actual Weights') < html.indexOf('📜 Protocol'), 'volumes should come first');
+  ok(html.includes('setRecVolume'));
+  ok(html.includes('addVolumeEntry'));
+  reset();
+});
+t('the batch header marks a measured volume', () => {
+  reset();
+  const line = aLine();
+  A.startTracking(line.key);
+  ok(!A.renderTrackingDetail(line).includes('(measured)'));
+  A.setRecVolume(line.key, 'mustGal', '99');
+  const html = A.renderTrackingDetail(line);
+  ok(html.includes('(measured)'), 'measured volume not flagged');
+  ok(html.includes('99.00 gal'));
+  reset();
+});
+t('volume data survives a profile round-trip', () => {
+  reset();
+  const line = aLine();
+  A.setRecVolume(line.key, 'fruitLbs', '512');
+  A.addVolumeEntry(line.key);
+  A.setVolumeEntry(line.key, A.trackingRec(line.key).volumeLog[0].id, 'gal', '33');
+  const prof = JSON.parse(JSON.stringify(A.stateToProfile('T', 'pT')));
+  S().tracking = {};
+  A.loadProfileIntoState(prof);
+  eq(A.trackingRec(line.key).volumes.fruitLbs, 512);
+  eq(A.trackingRec(line.key).volumeLog[0].gal, '33');
+  reset();
+});
+t('an old tracking record with no volume fields migrates', () => {
+  reset();
+  S().tracking['legacy::x'] = { started: true, stage: 'primary', ml: { enabled: false, timing: 'post' } };
+  A.migrateState();
+  eq(S().tracking['legacy::x'].volumes, { fruitLbs: null, mustGal: null });
+  eq(S().tracking['legacy::x'].volumeLog, []);
+  reset();
+});
+
+/* ══════════════════════════════════════════════════════════
+   Calculators
+   ══════════════════════════════════════════════════════════ */
+t('SO2 maths reproduces the MoreWine checklist figure', () => {
+  near(A.kmsGrams(50, 5), 1.64, 0.02, '50 ppm into 5 gal');
+  near(A.kmsGrams(50, 1), 0.33, 0.01, 'the 0.33 g/gal on the sheet');
+  eq(A.kmsGrams(-10, 5), 0, 'no negative doses');
+  eq(A.kmsGrams(50, 0), 0);
+});
+t('molecular SO2 falls off as pH rises', () => {
+  near(A.molecularSO2(30, 3.2), 1.17, 0.02);
+  near(A.molecularSO2(30, 3.8), 0.30, 0.02);
+  ok(A.molecularSO2(30, 3.2) > A.molecularSO2(30, 3.8) * 3.5,
+     'the pH effect should be roughly fourfold across that range');
+  near(A.freeSO2Needed(A.molecularSO2(30, 3.5), 3.5), 30, 0.01, 'the two should be inverses');
+});
+t('free SO2 target rises steeply with pH', () => {
+  const at32 = A.freeSO2Needed(0.5, 3.2), at38 = A.freeSO2Needed(0.5, 3.8);
+  near(at32, 12.5, 1); near(at38, 49.6, 2);
+  ok(at38 > at32 * 3);
+});
+t('Brix and SG convert consistently', () => {
+  near(A.brixToSG(0), 1.0, 0.001);
+  near(A.brixToSG(22), 1.0916, 0.002);
+  near(A.sgToBrix(A.brixToSG(22)), 22, 0.01, 'round trip');
+  [0, 5, 12, 18, 22, 26, 30].forEach(b =>
+    near(A.sgToBrix(A.brixToSG(b)), b, 0.01, 'round trip at ' + b + ' Brix'));
+});
+t('chaptalization is a mass balance, checked against first principles', () => {
+  // 1 lb of sugar in 1 gal of water is 454 / (3785 + 454) = 10.7 Brix
+  near(A.chaptalGrams(1, 0, 10.71), 454, 6, 'sugar into water');
+  near(A.chaptalGrams(5, 21, 24) / 5, 162, 2, 'g per gallon for +3 Brix');
+  eq(A.chaptalGrams(5, 24, 21), 0, 'no negative sugar');
+  eq(A.chaptalGrams(0, 21, 24), 0);
+});
+t('dilution maths conserves sugar', () => {
+  const w = A.dilutionGal(5, 27, 24);
+  near(w, 0.625, 0.01);
+  near(5 * 27, (5 + w) * 24, 0.01, 'sugar mass should be unchanged');
+  eq(A.dilutionGal(5, 24, 27), 0, 'water cannot raise Brix');
+});
+t('tartaric acid is 3.79 g per gallon per g/L', () => {
+  near(A.tartaricGrams(1, 5, 6), 3.785, 0.01);
+  near(A.tartaricGrams(5, 5.0, 6.5), 28.39, 0.05);
+  eq(A.tartaricGrams(5, 6, 5), 0, 'acid cannot lower TA');
+});
+t('deacidification uses the right rate per agent', () => {
+  near(A.deacidGrams(5, 9, 7, 'khco3'), 34, 0.1);
+  near(A.deacidGrams(5, 9, 7, 'caco3'), 25, 0.1);
+  ok(A.deacidGrams(5, 9, 7, 'khco3') > A.deacidGrams(5, 9, 7, 'caco3'),
+     'chalk is the stronger agent per gram');
+  eq(A.deacidGrams(5, 7, 9, 'khco3'), 0);
+});
+t('ABV works from both gravity and Brix', () => {
+  near(A.abvFromSG(1.095, 0.995), 13.13, 0.01);
+  near(A.abvFromBrix(23, -1.5), 13.1, 0.6);
+  ok(A.abvFromSG(1.0, 1.0) === 0);
+});
+t('the Pearson square splits proportionally and refuses the impossible', () => {
+  eq(A.pearson(24, 19, 22), { pctA: 60, pctB: 40 });
+  eq(A.pearson(24, 19, 24), { pctA: 100, pctB: 0 });
+  eq(A.pearson(24, 19, 30), null, 'a target outside the range is not blendable');
+  eq(A.pearson(24, 19, 15), null);
+  eq(A.pearson(20, 20, 20), null, 'identical wines have nothing to blend');
+});
+t('the calculators tab renders every card', () => {
+  reset();
+  A.S.ui.tab = 'calculators';
+  const html = A.renderTab();
+  ['SO₂ Addition', 'Chaptalization', 'Water Addition', 'Acid Addition',
+   'Deacidification', 'Alcohol by Volume', 'Pearson square', 'Yield'].forEach(h =>
+    ok(html.includes(h), 'missing card: ' + h));
+  ok(html.includes('id="calc-so2Vol"'), 'inputs need ids so focus survives the re-render');
+  A.S.ui.tab = 'wines';
+});
+t('calculator inputs persist and reset', () => {
+  reset();
+  A.setCalc('so2Vol', '17.5');
+  eq(A.calcNum('so2Vol'), 17.5);
+  A.S.ui.tab = 'calculators';
+  ok(A.renderTab().includes('value="17.5"'));
+  A.S.ui.tab = 'wines';
+  A.resetCalcs();
+  eq(A.calcNum('so2Vol'), A.CALC_DEFAULTS.so2Vol, 'reset should fall back to the default');
+  reset();
+});
+t('calculators survive nonsense input without throwing', () => {
+  reset();
+  A.S.ui.tab = 'calculators';
+  ['so2Vol', 'so2pH', 'chapVol', 'chapBrix', 'chapTarget', 'dilVol', 'acidVol',
+   'deacidVol', 'psA', 'psB', 'psTarget', 'yieldLbs', 'yieldRate'].forEach(k => A.setCalc(k, ''));
+  ok(A.renderTab().length > 500, 'blank inputs broke the tab');
+  ['so2Vol', 'chapVol', 'yieldRate'].forEach(k => A.setCalc(k, '-99'));
+  ok(A.renderTab().length > 500, 'negative inputs broke the tab');
+  ['so2pH', 'chapBrix'].forEach(k => A.setCalc(k, 'abc'));
+  ok(A.renderTab().length > 500, 'text in a number field broke the tab');
+  A.S.ui.tab = 'wines';
+  reset();
+});
+t('the yield calculator matches the app loss chain', () => {
+  reset();
+  A.setCalc('yieldLbs', '1300'); A.setCalc('yieldRate', '13');
+  A.setCalc('yieldSecondary', 'yes');
+  A.S.ui.tab = 'calculators';
+  const withSec = A.renderTab();
+  ok(withSec.includes('100.00 gal'), 'must volume wrong');
+  ok(withSec.includes('85.00 gal'), 'press volume wrong');
+  ok(withSec.includes('80.75 gal'), 'aging volume wrong');
+  ok(withSec.includes('Racked to aging'), 'the racking row should be there');
+  A.setCalc('yieldSecondary', 'no');
+  const noSec = A.renderTab();
+  ok(noSec.includes('85.00 gal'), 'without a secondary, press volume goes straight to aging');
+  ok(!noSec.includes('Racked to aging'), 'the racking row should be gone');
+  ok(noSec.includes('Skipping the secondary'), 'no explanation of the difference');
+  const bottles = h => +(h.match(/(\d+) bottles/) || [])[1];
+  ok(bottles(noSec) > bottles(withSec), 'skipping a racking should yield more bottles');
+  A.S.ui.tab = 'wines';
+  reset();
+});
+t('switching to Calculators clears the open protocol', () => {
+  reset();
+  A.S.ui.protocolId = 'red-native';
+  A.switchTab('calculators');
+  eq(A.S.ui.protocolId, null);
+  eq(A.S.ui.tab, 'calculators');
+  A.S.ui.tab = 'wines';
   reset();
 });
 

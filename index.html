@@ -248,6 +248,7 @@ body{font-family:Georgia,'Palatino Linotype',serif;background:var(--bg);color:va
       <button class="tab" data-tab="grapes" onclick="switchTab('grapes')">🍇 Grapes</button>
       <button class="tab" data-tab="protocols" onclick="switchTab('protocols')">📜 Protocols</button>
       <button class="tab" data-tab="tracking" onclick="switchTab('tracking')">🧪 Tracking</button>
+      <button class="tab" data-tab="calculators" onclick="switchTab('calculators')">🧮 Calculators</button>
       <button class="tab" data-tab="supplies" onclick="switchTab('supplies')">🛒 Supplies</button>
       <button class="tab" data-tab="flowchart" onclick="switchTab('flowchart')">📊 Flowchart</button>
     </nav>
@@ -307,6 +308,7 @@ function stateToProfile(name, id){
     protocols:JSON.parse(JSON.stringify(S.protocols||[])),
     protocolEdits:JSON.parse(JSON.stringify(S.protocolEdits||{})),
     purchased:JSON.parse(JSON.stringify(S.purchased||{})),
+    customProducts:JSON.parse(JSON.stringify(S.customProducts||{})),
     tracking:JSON.parse(JSON.stringify(S.tracking||{}))};
 }
 function loadProfileIntoState(p){
@@ -320,6 +322,7 @@ function loadProfileIntoState(p){
   S.protocols = p.protocols||[];
   S.protocolEdits = p.protocolEdits||{};
   S.purchased = p.purchased||{};
+  S.customProducts = p.customProducts||{};
   S.ui.trackKey = null;
   S.ui.protocolId = null;
   migrateState();
@@ -508,7 +511,7 @@ let S = {
       showCustomYeastForm:false,editingEqId:null,editingGrapeId:null,editingYeastId:null,trackKey:null,
       quickGrape:null,
       grapeSort:'name',grapeSortDir:'asc',grapeSearch:'',grapeTypeFilter:'all',grapeFormFilter:'all',
-      protocolId:null,shopOptional:false,shopMargin:10}
+      protocolId:null,shopOptional:false,shopMargin:10,calc:{}}
 };
 
 // ════════════════════════════════════════════
@@ -642,6 +645,12 @@ function migrateState(){
   if(!S.protocols) S.protocols = [];
   if(!S.protocolEdits) S.protocolEdits = {};
   if(!S.purchased) S.purchased = {};
+  if(!S.customProducts) S.customProducts = {};
+  if(!S.ui.calc) S.ui.calc = {};
+  Object.values(S.tracking||{}).forEach(r=>{
+    if(!r.volumes) r.volumes = {fruitLbs:null,mustGal:null};
+    if(!r.volumeLog) r.volumeLog = [];
+  });
   (S.grapes||[]).forEach(g=>{
     if(g.protocolId===undefined) g.protocolId = null;      // null → default for its color
     if(g.roseProtocolId===undefined) g.roseProtocolId = null;
@@ -776,6 +785,123 @@ const CHEM_CATALOG = {
   'Oak chips (French, untoasted)':{cat:'Oak',        packs:[454,2270],   unit:'g', note:'Second choice for color fixing'},
   'Oak chips (American, light toast)':{cat:'Oak',    packs:[454,2270],   unit:'g', note:'Third choice for color fixing'},
 };
+
+// ── Product library: shipped catalog plus anything the winemaker adds ──
+// Custom products live in S.customProducts, keyed by name. Renaming one
+// rewrites every protocol addition that referenced the old name, so a rename
+// never silently orphans a line item on the shopping list.
+const PRODUCT_CATS = ['SO₂','Enzyme','Enhancer','Tannin','Nutrient','ML Nutrient','Fining','Stabilizer','Acid','Oak','Other'];
+const PRODUCT_UNITS = ['g','mL','kit','ea'];
+
+function productCatalog(){
+  return Object.assign({}, CHEM_CATALOG, (typeof S!=='undefined'&&S.customProducts)||{});
+}
+function productInfo(name){
+  return productCatalog()[name] || {cat:'Other',unit:'g',packs:null,note:''};
+}
+function isCustomProduct(name){ return !!((S.customProducts||{})[name]) && !CHEM_CATALOG[name]; }
+// Every product currently referenced by a protocol, whether or not it's catalogued
+function productsInUse(){
+  const map={};
+  protocolLibrary().forEach(p=>(p.additions||[]).forEach(a=>{
+    (map[a.product]=map[a.product]||[]).push(p.name);
+  }));
+  return map;
+}
+function addCustomProduct(){
+  if(!S.customProducts) S.customProducts={};
+  let name='New product', i=2;
+  while(productCatalog()[name]) name='New product '+(i++);
+  S.customProducts[name]={cat:'Other',unit:'g',packs:[100],note:'',custom:true};
+  render();
+}
+function setProductField(name,field,val){
+  if(!S.customProducts||!S.customProducts[name]) return;
+  const p=S.customProducts[name];
+  if(field==='packs'){
+    p.packs=String(val||'').split(/[,\s]+/).map(x=>parseFloat(x)).filter(x=>x>0).sort((a,b)=>a-b);
+    if(!p.packs.length) p.packs=null;
+  } else if(field==='name'){
+    const next=String(val||'').trim();
+    if(!next||next===name) return;
+    if(productCatalog()[next]){ alert('There is already a product called "'+next+'".'); render(); return; }
+    delete S.customProducts[name];
+    S.customProducts[next]=p;
+    // Follow the rename through every protocol that used it
+    [...PROTOCOL_PRESETS.map(x=>x.id)].forEach(id=>{
+      const e=(S.protocolEdits||{})[id]; if(!e) return;
+      (e.additions||[]).forEach(a=>{ if(a.product===name) a.product=next; });
+    });
+    (S.protocols||[]).forEach(pr=>(pr.additions||[]).forEach(a=>{ if(a.product===name) a.product=next; }));
+    // Carry the purchase checkmark across too
+    if(S.purchased){
+      Object.keys(S.purchased).forEach(k=>{
+        const [cat,prod]=k.split('|');
+        if(prod===name){ S.purchased[cat+'|'+next]=S.purchased[k]; delete S.purchased[k]; }
+      });
+    }
+  } else p[field]=val;
+  render();
+}
+function delCustomProduct(name){
+  const used=productsInUse()[name];
+  if(used&&used.length){
+    if(!confirm(`"${name}" is used by ${used.length} protocol${used.length>1?'s':''} (${used.join(', ')}). Delete it anyway? Those additions will keep the name but lose their pack sizes and category.`)) return;
+  } else if(!confirm(`Delete "${name}"?`)) return;
+  delete S.customProducts[name];
+  render();
+}
+
+function renderProductLibrary(){
+  const cat=productCatalog(), inUse=productsInUse();
+  const custom=Object.keys(cat).filter(isCustomProduct).sort();
+  const builtin=Object.keys(CHEM_CATALOG);
+  // A product referenced by a protocol but missing from the catalog entirely
+  const orphans=Object.keys(inUse).filter(n=>!cat[n]);
+
+  const customRows=custom.map(n=>{
+    const p=cat[n], uses=inUse[n]||[];
+    return `<tr>
+      <td><input class="fc" style="font-size:12px;min-width:150px" value="${esc(n)}" onchange="setProductField('${jsStr(n)}','name',this.value)"></td>
+      <td><select class="fc" style="font-size:11px" onchange="setProductField('${jsStr(n)}','cat',this.value)">
+        ${PRODUCT_CATS.map(c=>`<option value="${c}" ${p.cat===c?'selected':''}>${c}</option>`).join('')}</select></td>
+      <td><select class="fc" style="font-size:11px;width:70px" onchange="setProductField('${jsStr(n)}','unit',this.value)">
+        ${PRODUCT_UNITS.map(u=>`<option value="${u}" ${p.unit===u?'selected':''}>${u}</option>`).join('')}</select></td>
+      <td><input class="fc" style="font-size:11px;width:110px" value="${esc((p.packs||[]).join(', '))}" placeholder="50, 100, 454"
+        title="Pack sizes you can buy, comma separated" onchange="setProductField('${jsStr(n)}','packs',this.value)"></td>
+      <td><input class="fc" style="font-size:11px;min-width:160px" value="${esc(p.note||'')}" placeholder="Dose notes, cautions…"
+        onchange="setProductField('${jsStr(n)}','note',this.value)"></td>
+      <td style="font-size:11px;color:var(--muted)">${uses.length?esc([...new Set(uses)].join(', ')):'unused'}</td>
+      <td><button class="btn btn-d btn-sm" onclick="delCustomProduct('${jsStr(n)}')">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const builtinRows=builtin.map(n=>{
+    const p=cat[n], uses=inUse[n]||[];
+    return `<tr>
+      <td class="txt-b">${esc(n)}</td><td>${p.cat}</td><td>${p.unit}</td>
+      <td style="font-size:11px">${(p.packs||[]).join(', ')}</td>
+      <td style="font-size:11px;color:var(--muted)">${esc(p.note||'')}</td>
+      <td style="font-size:11px;color:var(--muted)">${uses.length?esc([...new Set(uses)].join(', ')):'unused'}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="panel" style="margin-top:12px">
+    <div class="ph"><div class="pt">🧾 Product Library</div>
+      <button class="btn btn-p btn-sm" onclick="addCustomProduct()">+ Add Product</button></div>
+    <div class="info-note mb8" style="font-size:11px">Anything here can be used in a protocol's addition schedule. Add your own products for what you actually stock — the category drives the compatibility checks (a product filed as <b>Tannin</b> gets the 8-hour enzyme rule, one filed as <b>Nutrient</b> counts toward the nitrogen check), and pack sizes drive the shopping list suggestions.</div>
+    ${orphans.length?`<div class="warn-note mb8" style="font-size:11px">⚠ ${orphans.length} product${orphans.length>1?'s are':' is'} used by a protocol but missing from this library: <b>${orphans.map(esc).join(', ')}</b>. They still total up on the shopping list, but with no category or pack size. Add them below to fix that.</div>`:''}
+    ${custom.length?`<div class="sdiv">Your products</div>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr>
+        <th>Name</th><th>Category</th><th>Unit</th><th>Pack sizes</th><th>Notes</th><th>Used by</th><th></th>
+      </tr></thead><tbody>${customRows}</tbody></table></div>`
+      :'<div class="txt-s txt-m mb8">No custom products yet. Add one for anything you stock that isn\'t below.</div>'}
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;font-weight:bold;color:var(--burg)">📦 Built-in products (${builtin.length})</summary>
+      <div style="overflow-x:auto;margin-top:6px"><table class="tbl"><thead><tr>
+        <th>Name</th><th>Category</th><th>Unit</th><th>Pack sizes</th><th>Notes</th><th>Used by</th>
+      </tr></thead><tbody>${builtinRows}</tbody></table></div></details>
+  </div>`;
+}
 
 // Where in the process an addition lands
 const PROTO_STAGES = [
@@ -1229,7 +1355,7 @@ function checkProtocol(p,ctx){
 
   // ── Enzyme / tannin / bentonite ──
   const enzymes=adds.filter(a=>/zyme/i.test(a.product));
-  const tannins=adds.filter(a=>CHEM_CATALOG[a.product]&&CHEM_CATALOG[a.product].cat==='Tannin');
+  const tannins=adds.filter(a=>productInfo(a.product).cat==='Tannin');
   enzymes.forEach(e=>tannins.forEach(t=>{
     if(e.stage===t.stage)
       add('error','ENZYME_TANNIN_STAGE',
@@ -1245,7 +1371,7 @@ function checkProtocol(p,ctx){
       'Bench trial the bentonite, and top the tannin back up afterward if the wine reads thin.');
 
   // ── Nutrition ──
-  const hasN=adds.some(a=>CHEM_CATALOG[a.product]&&CHEM_CATALOG[a.product].cat==='Nutrient'&&a.product!=='Go-Ferm Protect');
+  const hasN=adds.some(a=>productInfo(a.product).cat==='Nutrient'&&a.product!=='Go-Ferm Protect');
   if(!hasN)
     add('warn','NO_NUTRIENT','No fermentation nutrient is scheduled. Nitrogen-starved ferments stick and throw H₂S.',
       'Add Fermaid K or Fermaid O at ⅓ sugar depletion.');
@@ -1315,8 +1441,8 @@ function checkLine(line){ return checkProtocol(protocolForLine(line.grapeId,line
 // ════════════════════════════════════════════
 // Every fermentation line contributes its protocol's addition schedule,
 // scaled by that line's must volume.
-function lineVolumes(line){
-  const must=line.mustGal||0;
+function lineVolumes(line,mustOverride){
+  const must=(mustOverride>0?mustOverride:line.mustGal)||0;
   const ch=chainFor(line.grapeId,line.isRose);
   return {gal_must:must, gal_wine:must*ch.pToS, lbs:must*grapeRatio(grapeById(line.grapeId))};
 }
@@ -1327,15 +1453,15 @@ function calcProtocolChemicals(opts){
   const rows=new Map();
   getTrackingLines().forEach(line=>{
     const p=protocolForLine(line.grapeId,line.isRose); if(!p) return;
-    const vol=lineVolumes(line);
+    const vol=lineVolumes(line,actualMust(trackingRec(line.key),line));
     (p.additions||[]).forEach(a=>{
       if(a.optional&&!includeOptional) return;
       const base=vol[a.basis]; if(base==null) return;
       const qty=(+a.rate||0)*base; if(!(qty>0)) return;
       if(!rows.has(a.product)) rows.set(a.product,{
-        product:a.product, cat:(CHEM_CATALOG[a.product]||{}).cat||'Other',
-        unit:(CHEM_CATALOG[a.product]||{}).unit||'g',
-        note:(CHEM_CATALOG[a.product]||{}).note||'', total:0, uses:[]});
+        product:a.product, cat:productInfo(a.product).cat||'Other',
+        unit:productInfo(a.product).unit||'g',
+        note:productInfo(a.product).note||'', total:0, uses:[]});
       const r=rows.get(a.product);
       r.total+=qty;
       r.uses.push({batch:trackLineName(line), protocol:p.name, stage:a.stage, qty});
@@ -1349,7 +1475,7 @@ function calcProtocolChemicals(opts){
   }).sort((a,b)=>a.cat.localeCompare(b.cat)||a.product.localeCompare(b.product));
 }
 function suggestPack(product,need){
-  const c=CHEM_CATALOG[product]; if(!c||!c.packs) return '';
+  const c=productCatalog()[product]; if(!c||!c.packs) return '';
   const fit=c.packs.find(p=>p>=need);
   if(fit) return `1 × ${fit} ${c.unit}`;
   const big=c.packs[c.packs.length-1];
@@ -1366,7 +1492,7 @@ function calcProtocolBiologicals(){
   };
   getTrackingLines().forEach(line=>{
     const p=protocolForLine(line.grapeId,line.isRose); if(!p) return;
-    const vol=lineVolumes(line);
+    const vol=lineVolumes(line,actualMust(trackingRec(line.key),line));
     if(p.ferment&&p.ferment.bioprotection)
       bump(p.ferment.bioprotection,'Bioprotection',vol.gal_must,line,p.name,'≈1 g/gal at crush');
     if(p.mlf&&p.mlf.mode!=='none'&&p.mlf.culture&&p.mlf.culture!=='native')
@@ -1687,6 +1813,7 @@ function renderTab(){
   if(S.ui.tab==='wines')    return renderWines();
   if(S.ui.tab==='protocols')return renderProtocolsTab();
   if(S.ui.tab==='tracking') return renderTrackingTab();
+  if(S.ui.tab==='calculators')return renderCalculatorsTab();
   if(S.ui.tab==='supplies') return renderSuppliesTab();
   if(S.ui.tab==='flowchart')return renderFlowchartTab();
   return renderWines();
@@ -2781,6 +2908,8 @@ function trackingRec(key){
   if(!r.processes) r.processes=[];
   if(!r.agingTests) r.agingTests=[];
   if(!r.stageDates) r.stageDates={};
+  if(!r.volumes) r.volumes={fruitLbs:null,mustGal:null};
+  if(!r.volumeLog) r.volumeLog=[];
   // ML follows the grape's protocol until this batch is manually overridden
   if(!r.mlManual){
     const p=keyProtocol(key);
@@ -2897,7 +3026,7 @@ function renderTrackingTab(){
         <span class="track-card-title">${trackLineName(line)}</span>
         ${trackStatusBadge(rec)}
       </div>
-      <div class="txt-s txt-m" style="margin:4px 0 2px">${yeast?yeast.name+' · ':''}${fmtGal(line.mustGal)} must${rec.started&&rec.stage?' → '+fmtGal(stageVolumes(line.mustGal,recNeedsSecondary(rec,line.key))[rec.stage])+' now':''}</div>
+      <div class="txt-s txt-m" style="margin:4px 0 2px">${yeast?yeast.name+' · ':''}${fmtGal(actualMust(rec,line))} must${actualMust(rec,line)!==line.mustGal?' <span style="color:var(--oak)">✓</span>':''}${rec.started&&rec.stage?' → '+fmtGal(stageVolumes(actualMust(rec,line),recNeedsSecondary(rec,line.key))[rec.stage])+' now':''}</div>
       <div class="txt-s txt-m" style="font-size:11px">${[...line.wines].join(', ')}</div>
       ${(()=>{ const p=protocolForLine(line.grapeId,line.isRose); if(!p) return '';
         const w=worstLevel(checkLine(line));
@@ -3180,9 +3309,11 @@ function renderTrackingDetail(line){
   const proto=protocolForLine(line.grapeId,line.isRose);
   const protoIssues=checkLine(line);
   const hasSec=recNeedsSecondary(rec,line.key);
+  const mustGal=actualMust(rec,line);            // measured if entered, planned if not
+  const measured=mustGal!==line.mustGal;
   const yeast=yeastById(line.yeastId);
   const curIdx=stages.indexOf(rec.stage);
-  const stepper=trkStepperHTML(rec,stages,stageVolumes(line.mustGal,hasSec));
+  const stepper=trkStepperHTML(rec,stages,stageVolumes(mustGal,hasSec));
   const nextStage=curIdx>=0&&curIdx<stages.length-1?stages[curIdx+1]:null;
   const additionsPanel=trkAdditionsPanel(line.key,rec);
   const processPanel=trkProcessPanel(line.key,rec);
@@ -3192,7 +3323,7 @@ function renderTrackingDetail(line){
   return `<div class="panel">
     <div class="ph">
       <div>
-        <div class="pt">${trackLineName(line)} <span style="font-weight:normal;font-size:13px;color:var(--muted)">${yeast?yeast.name+' · ':''}${fmtGal(line.mustGal)} must</span></div>
+        <div class="pt">${trackLineName(line)} <span style="font-weight:normal;font-size:13px;color:var(--muted)">${yeast?yeast.name+' · ':''}${fmtGal(mustGal)} must${measured?' <span style="color:var(--oak)">(measured)</span>':''}</span></div>
         <div class="txt-s txt-m mt4">${[...line.wines].join(', ')} ${rec.startDate?` · started ${rec.startDate} (day ${daysSince(rec.startDate)+1})`:''}</div>
       </div>
       <div class="flex gap8">
@@ -3217,6 +3348,8 @@ function renderTrackingDetail(line){
         <td>Total secondary</td><td>${fmtGal(dist.totalSec)}</td><td>100%</td></tr></tfoot></table>`;
     })()}
 
+    ${trkVolumePanel(line,rec)}
+
     <div class="sdiv">📜 Protocol</div>
     <div class="flex fai gap12 mb8" style="flex-wrap:wrap">
       <select class="fc" style="width:auto;min-width:230px;font-size:12px" onchange="${line.isRose?`setGrapeRoseProtocol('${line.grapeId}',this.value)`:`setGrapeProtocol('${line.grapeId}',this.value)`}">
@@ -3228,9 +3361,9 @@ function renderTrackingDetail(line){
     ${protoWarnStrip(protoIssues)}
     ${proto&&proto.steps&&proto.steps.length?`<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:12px;font-weight:bold;color:var(--burg)">📋 ${esc(proto.name)} — ${proto.steps.length} steps</summary>
       <ol style="margin:6px 0 0 18px;padding:0;font-size:12px;color:var(--text);line-height:1.65">${proto.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></details>`:''}
-    ${proto?`<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:12px;font-weight:bold;color:var(--burg)">🧪 Additions this protocol calls for — ${fmtGal(line.mustGal)} must</summary>
+    ${proto?`<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:12px;font-weight:bold;color:var(--burg)">🧪 Additions this protocol calls for — ${fmtGal(mustGal)} must${measured?' (measured)':''}</summary>
       <table class="tbl" style="margin-top:6px"><thead><tr><th>When</th><th>Product</th><th>Rate</th><th>This batch</th></tr></thead><tbody>
-      ${(proto.additions||[]).map(a=>{ const v=lineVolumes(line)[a.basis]||0; const q=Math.round((+a.rate||0)*v*100)/100;
+      ${(proto.additions||[]).map(a=>{ const v=lineVolumes(line,mustGal)[a.basis]||0; const q=Math.round((+a.rate||0)*v*100)/100;
         return `<tr><td style="font-size:11px">${PROTO_STAGE_LABEL[a.stage]||a.stage}</td>
           <td class="txt-b">${esc(a.product)}${a.optional?' <span class="txt-m" style="font-size:10px">(optional)</span>':''}
           ${a.note?`<div class="txt-s txt-m" style="font-size:10px">${esc(a.note)}</div>`:''}</td>
@@ -4499,6 +4632,164 @@ function updateTank(wid,ciRaw,ti,key,val){
 // BETA — feedback + welcome
 // ════════════════════════════════════════════
 // ════════════════════════════════════════════
+// ACTUAL VOLUMES — what really came off the press
+// ════════════════════════════════════════════
+// Planning numbers are estimates. This is the measured reality: fruit on the
+// scale, must in the fermenter, and every volume you take after that. Once an
+// actual must volume is entered, the stepper and the protocol addition
+// quantities switch to it, so the doses you're handed are for the wine you
+// actually have.
+
+const VOL_EVENTS=[
+  ['crush',      '🍇 Crushed / must in fermenter'],
+  ['press',      '🗜 Off the press'],
+  ['grosslees',  '🫗 Racked off gross lees'],
+  ['racking',    '🔄 Racking'],
+  ['postml',     '🦠 After MLF'],
+  ['coldstab',   '❄️ After cold stabilization'],
+  ['fining',     '✨ After fining'],
+  ['filter',     '🧽 After filtration'],
+  ['topup',      '⬆️ Topped up'],
+  ['barrel',     '🛢 Into barrel / aging vessel'],
+  ['bottling',   '🍾 At bottling'],
+  ['other',      '📏 Other measurement'],
+];
+const VOL_EVENT_LABEL=Object.fromEntries(VOL_EVENTS);
+
+function recVolumes(rec){
+  if(!rec.volumes) rec.volumes={fruitLbs:null,mustGal:null};
+  if(!rec.volumeLog) rec.volumeLog=[];
+  return rec.volumes;
+}
+// The volume every downstream calculation should use: measured if we have it,
+// planned if we don't.
+function actualMust(rec,line){
+  const v=rec&&rec.volumes;
+  return (v&&+v.mustGal>0)?+v.mustGal:line.mustGal;
+}
+function actualFruitLbs(rec,line){
+  const v=rec&&rec.volumes;
+  if(v&&+v.fruitLbs>0) return +v.fruitLbs;
+  return line.mustGal*grapeRatio(grapeById(line.grapeId));
+}
+// lbs of fruit per gallon of must, as actually measured
+function measuredYield(rec){
+  const v=rec&&rec.volumes;
+  if(!v||!(+v.fruitLbs>0)||!(+v.mustGal>0)) return null;
+  return +v.fruitLbs/+v.mustGal;
+}
+// The most recent measured volume at or before a stage, for loss maths
+function latestVolume(rec){
+  const log=(rec.volumeLog||[]).filter(e=>+e.gal>0);
+  if(!log.length) return (rec.volumes&&+rec.volumes.mustGal>0)?+rec.volumes.mustGal:null;
+  return +log[log.length-1].gal;
+}
+
+function setRecVolume(key,field,val){
+  const {rec}=stageRecAndList(key); recVolumes(rec);
+  const n=parseFloat(val);
+  rec.volumes[field]=(isNaN(n)||n<=0)?null:n;
+  render();
+}
+function addVolumeEntry(key){
+  const {rec}=stageRecAndList(key); recVolumes(rec);
+  rec.volumeLog.push({id:uid(),date:todayStr(),event:'racking',gal:'',note:''});
+  render();
+}
+function setVolumeEntry(key,id,field,val){
+  const {rec}=stageRecAndList(key); recVolumes(rec);
+  const e=rec.volumeLog.find(x=>x.id===id); if(!e) return;
+  e[field]=(field==='gal')?val:val;
+  render();
+}
+function delVolumeEntry(key,id){
+  const {rec}=stageRecAndList(key); recVolumes(rec);
+  rec.volumeLog=rec.volumeLog.filter(x=>x.id!==id);
+  render();
+}
+// Push the measured extraction rate back onto the grape so future planning
+// uses the number this fruit actually gave.
+function applyMeasuredYield(key,grapeId){
+  const {rec}=stageRecAndList(key);
+  const y=measuredYield(rec); if(!y) return;
+  const g=grapeById(grapeId); if(!g) return;
+  if(!confirm(`Set ${g.name} to ${y.toFixed(2)} lbs/gal? This re-runs every plan that uses this grape.`)) return;
+  g.lbsPerGal=Math.round(y*100)/100;
+  render();
+}
+
+function trkVolumePanel(line,rec){
+  recVolumes(rec);
+  const v=rec.volumes;
+  const plannedLbs=line.mustGal*grapeRatio(grapeById(line.grapeId));
+  const yieldRate=measuredYield(rec);
+  const plannedRate=grapeRatio(grapeById(line.grapeId));
+  const delta=(a,b)=>{ if(!(a>0)||!(b>0)) return ''; const d=((a-b)/b)*100;
+    if(Math.abs(d)<0.5) return '<span class="txt-m" style="font-size:11px">on plan</span>';
+    const c=d>0?'#5D8A5E':'#C0703A';
+    return `<span style="font-size:11px;color:${c};font-weight:bold">${d>0?'+':''}${d.toFixed(0)}% vs plan</span>`; };
+
+  // Running losses down the volume log
+  const log=(rec.volumeLog||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  let prev=(+v.mustGal>0)?+v.mustGal:null;
+  const rows=log.map(e=>{
+    const g=parseFloat(e.gal);
+    const has=!isNaN(g)&&g>0;
+    let change='—';
+    if(has&&prev>0){
+      const d=g-prev, pct=(d/prev)*100;
+      const c=d<0?'#C0703A':'#5D8A5E';
+      change=`<span style="color:${c};font-size:11px">${d>0?'+':''}${d.toFixed(2)} gal · ${pct>0?'+':''}${pct.toFixed(1)}%</span>`;
+    }
+    if(has) prev=g;
+    return `<tr>
+      <td><input class="fc" type="date" style="font-size:11px;width:130px" value="${esc(e.date||'')}" onchange="setVolumeEntry('${line.key}','${e.id}','date',this.value)"></td>
+      <td><select class="fc" style="font-size:11px;min-width:180px" onchange="setVolumeEntry('${line.key}','${e.id}','event',this.value)">
+        ${VOL_EVENTS.map(([k,l])=>`<option value="${k}" ${e.event===k?'selected':''}>${l}</option>`).join('')}</select></td>
+      <td><input class="fc trk-num" type="number" step="0.05" min="0" style="width:85px" value="${esc(e.gal)}" placeholder="gal"
+        onchange="setVolumeEntry('${line.key}','${e.id}','gal',this.value)"></td>
+      <td>${change}</td>
+      <td><input class="fc" style="font-size:11px;min-width:150px" value="${esc(e.note||'')}" placeholder="What happened"
+        onchange="setVolumeEntry('${line.key}','${e.id}','note',this.value)"></td>
+      <td><button class="btn btn-d btn-sm" onclick="delVolumeEntry('${line.key}','${e.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  const first=(+v.mustGal>0)?+v.mustGal:null;
+  const last=latestVolume(rec);
+  const totalLoss=(first>0&&last>0&&last!==first)?((last-first)/first)*100:null;
+
+  return `<div class="sdiv">📏 Actual Weights & Volumes</div>
+  <div class="info-note mb8" style="font-size:11px">Planning numbers are estimates. Enter what you actually measured and the stepper, the addition doses and the loss tracking below all switch to real figures.</div>
+  <div class="g3 mb8">
+    <div class="fg"><label class="lbl">Fruit on the scale (lbs)</label>
+      <input class="fc trk-num" id="vol-fruit-${line.key}" type="number" step="1" min="0" value="${v.fruitLbs==null?'':v.fruitLbs}"
+        placeholder="${Math.round(plannedLbs)}" onchange="setRecVolume('${line.key}','fruitLbs',this.value)">
+      <div class="txt-s txt-m" style="font-size:10px;margin-top:2px">Planned ${fmtLbs(plannedLbs)} ${delta(+v.fruitLbs,plannedLbs)}</div></div>
+    <div class="fg"><label class="lbl">Must in the fermenter (gal)</label>
+      <input class="fc trk-num" id="vol-must-${line.key}" type="number" step="0.05" min="0" value="${v.mustGal==null?'':v.mustGal}"
+        placeholder="${line.mustGal.toFixed(2)}" onchange="setRecVolume('${line.key}','mustGal',this.value)">
+      <div class="txt-s txt-m" style="font-size:10px;margin-top:2px">Planned ${fmtGal(line.mustGal)} ${delta(+v.mustGal,line.mustGal)}</div></div>
+    <div class="fg"><label class="lbl">Measured extraction</label>
+      <div class="fc fc-ro">${yieldRate?`${yieldRate.toFixed(2)} lbs/gal`:'—'}</div>
+      <div class="txt-s txt-m" style="font-size:10px;margin-top:2px">
+        ${yieldRate?`Planned ${plannedRate.toFixed(2)} lbs/gal${Math.abs(yieldRate-plannedRate)>0.1?` · <a href="#" onclick="applyMeasuredYield('${line.key}','${line.grapeId}');return false" style="color:var(--burg)">use this for ${esc(grapeById(line.grapeId)?.name||'the grape')}</a>`:''}`
+          :'Enter both weight and volume'}</div></div>
+  </div>
+  ${(+v.mustGal>0)?`<div class="info-note mb8" style="font-size:11px">✔ Doses and stage volumes on this batch are now based on the measured <b>${fmtGal(+v.mustGal)}</b>, not the planned ${fmtGal(line.mustGal)}.</div>`:''}
+
+  <div class="flex fai gap8 mb8" style="flex-wrap:wrap">
+    <b style="font-size:12px;color:var(--burg)">Volume log</b>
+    <button class="btn btn-s btn-sm" onclick="addVolumeEntry('${line.key}')">+ Measurement</button>
+    ${totalLoss!=null?`<span class="txt-s txt-m" style="font-size:11px">From must to last reading: <b style="color:${totalLoss<0?'#C0703A':'#5D8A5E'}">${totalLoss>0?'+':''}${totalLoss.toFixed(1)}%</b> (${fmtGal(first)} → ${fmtGal(last)})</span>`:''}
+  </div>
+  ${log.length?`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+    <th>Date</th><th>What</th><th>Volume</th><th>Change</th><th>Note</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table></div>`
+  :'<div class="txt-s txt-m mb8" style="font-size:11px">Nothing measured yet. Add a reading each time you move the wine — off gross lees, each racking, after cold stabilization, at bottling.</div>'}`;
+}
+
+// ════════════════════════════════════════════
 // PROTOCOLS TAB
 // ════════════════════════════════════════════
 function issueDot(level){
@@ -4611,6 +4902,7 @@ function renderProtocolsTab(){
     </div>
 
     <div class="panel" style="margin-top:12px">${cards}</div>
+    ${renderProductLibrary()}
   </div>`;
 }
 
@@ -4623,8 +4915,17 @@ function renderProtocolDetail(p){
     .map(l=>({line:l,issues:checkLine(l)}))
     .filter(x=>x.issues.length>issues.length);
 
-  const prodOpts=sel=>Object.keys(CHEM_CATALOG)
-    .map(n=>`<option value="${esc(n)}" ${n===sel?'selected':''}>${esc(n)}</option>`).join('');
+  const prodOpts=sel=>{
+    const cat=productCatalog();
+    const names=Object.keys(cat);
+    if(sel&&!cat[sel]) names.push(sel);             // keep an orphan selectable
+    const byCat={};
+    names.forEach(n=>{ const c=(cat[n]||{}).cat||'Other'; (byCat[c]=byCat[c]||[]).push(n); });
+    return Object.keys(byCat).sort().map(c=>
+      `<optgroup label="${esc(c)}">${byCat[c].sort().map(n=>
+        `<option value="${esc(n)}" ${n===sel?'selected':''}>${esc(n)}${isCustomProduct(n)?' ✎':''}</option>`).join('')}</optgroup>`
+    ).join('');
+  };
 
   const addRows=(p.additions||[]).map((a,i)=>`<tr>
     <td><select class="fc" style="font-size:11px;min-width:120px" onchange="setProtoAdd('${p.id}',${i},'stage',this.value)">
@@ -4721,7 +5022,7 @@ function renderProtocolDetail(p){
     <div class="panel" style="margin-top:12px">
       <div class="ph"><div class="pt">🧪 Addition schedule</div>
         <button class="btn btn-s btn-sm" onclick="addProtoAddition('${p.id}')">+ Addition</button></div>
-      <div class="info-note mb8" style="font-size:11px">Rates drive the Supplies shopping list. <b>per gal must</b> is pre-press volume; <b>per gal wine</b> is what's left after pressing. Optional rows stay out of the shopping list unless you switch them on there.</div>
+      <div class="info-note mb8" style="font-size:11px">Rates drive the Supplies shopping list. <b>per gal must</b> is pre-press volume; <b>per gal wine</b> is what's left after pressing. Optional rows stay out of the shopping list unless you switch them on there. Product not in the list? Add it in the <a href="#" onclick="S.ui.protocolId=null;render();return false" style="color:var(--burg);font-weight:bold">Product Library</a> and it will show up here.</div>
       ${(p.additions||[]).length?`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
         <th>When</th><th>Product</th><th>Rate</th><th>Basis</th><th>Opt.</th><th>Note</th><th></th>
       </tr></thead><tbody>${addRows}</tbody></table></div>`
@@ -4859,6 +5160,288 @@ function renderShoppingList(){
       <th style="width:34px">✓</th><th>Item</th><th>Needed</th><th>Buy (+${Math.round(margin*100)}%)</th><th>Suggested pack</th><th>For</th>
     </tr></thead><tbody>${body}</tbody></table></div>
     <div class="info-note mt8" style="font-size:11px">💡 Rates are planning starting points from the MoreWine checklists and standard Lallemand labels — confirm against the current product label before crush.</div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════
+// CALCULATORS
+// ════════════════════════════════════════════
+// Eight bench calculations a home winemaker actually reaches for, each showing
+// its working so you can sanity-check the number before you dump anything in a
+// carboy. Inputs persist in S.ui.calc so a tab switch doesn't lose your place.
+
+const L_PER_GAL = 3.785411784;
+const KMS_SO2_FRACTION = 0.576;   // potassium metabisulfite is ~57.6% SO₂ by weight
+
+const CALC_DEFAULTS = {
+  so2Vol:5, so2pH:3.5, so2Free:0, so2Target:0.5, so2Style:'red',
+  chapVol:5, chapBrix:21, chapTarget:24,
+  dilVol:5, dilBrix:27, dilTarget:24,
+  acidVol:5, acidTA:5.0, acidTarget:6.5,
+  deacidVol:5, deacidTA:9.0, deacidTarget:7.0, deacidAgent:'khco3',
+  abvMode:'sg', abvStartSG:1.095, abvEndSG:0.995, abvStartBrix:23, abvEndBrix:-1.5,
+  psA:24, psB:19, psTarget:22, psVol:10,
+  yieldLbs:1000, yieldRate:13, yieldSecondary:'yes',
+};
+function calcVal(k){
+  if(!S.ui.calc) S.ui.calc={};
+  const v=S.ui.calc[k];
+  return (v===undefined||v==='')?CALC_DEFAULTS[k]:v;
+}
+function calcNum(k){ const n=parseFloat(calcVal(k)); return isNaN(n)?0:n; }
+function setCalc(k,v){ if(!S.ui.calc) S.ui.calc={}; S.ui.calc[k]=v; render(); }
+function resetCalcs(){ S.ui.calc={}; render(); }
+
+// ── Shared bits of markup ──
+function calcIn(k,label,opts){
+  opts=opts||{};
+  return `<div class="fg"><label class="lbl">${label}</label>
+    <input class="fc trk-num" id="calc-${k}" type="number" step="${opts.step||'0.1'}" ${opts.min!=null?`min="${opts.min}"`:''}
+      value="${esc(calcVal(k))}" onchange="setCalc('${k}',this.value)"></div>`;
+}
+function calcSel(k,label,options){
+  return `<div class="fg"><label class="lbl">${label}</label>
+    <select class="fc" id="calc-${k}" onchange="setCalc('${k}',this.value)">
+      ${options.map(([v,l])=>`<option value="${v}" ${String(calcVal(k))===String(v)?'selected':''}>${l}</option>`).join('')}
+    </select></div>`;
+}
+function calcOut(label,value,sub){
+  return `<div style="background:var(--parch);border-radius:6px;padding:9px 12px;margin-bottom:6px">
+    <div class="txt-s txt-m" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px">${label}</div>
+    <div style="font-size:19px;font-weight:bold;color:var(--burg);font-family:Georgia,serif;margin-top:1px">${value}</div>
+    ${sub?`<div class="txt-s txt-m" style="font-size:11px;margin-top:2px">${sub}</div>`:''}
+  </div>`;
+}
+function calcCard(title,body,note){
+  return `<div class="panel" style="margin-top:12px">
+    <div class="ph"><div class="pt">${title}</div></div>
+    ${body}
+    ${note?`<div class="info-note mt8" style="font-size:11px">${note}</div>`:''}
+  </div>`;
+}
+const g2 = n => Math.round(n*100)/100;
+
+// ── The maths, kept out of the markup so it can be tested directly ──
+
+// Molecular SO₂ is the fraction that actually protects the wine, and it falls
+// off a cliff as pH rises. Free SO₂ alone tells you almost nothing.
+function molecularSO2(freeSO2,pH){ return freeSO2/(1+Math.pow(10,pH-1.81)); }
+function freeSO2Needed(molecularTarget,pH){ return molecularTarget*(1+Math.pow(10,pH-1.81)); }
+function kmsGrams(ppmDelta,gallons){
+  if(ppmDelta<=0||gallons<=0) return 0;
+  return (ppmDelta*gallons*L_PER_GAL)/1000/KMS_SO2_FRACTION;
+}
+// The standard cubic, Brix from specific gravity
+function sgToBrix(sg){ return ((182.4601*sg-775.6821)*sg+1262.7794)*sg-669.5622; }
+// Its numeric inverse, so the two directions can never drift apart
+function brixToSG(b){
+  let lo=0.95, hi=1.35;
+  for(let i=0;i<48;i++){ const mid=(lo+hi)/2; if(sgToBrix(mid)<b) lo=mid; else hi=mid; }
+  return (lo+hi)/2;
+}
+// Sugar to raise a must from one Brix to another, by mass balance
+function chaptalGrams(volGal,brix,target){
+  if(target<=brix||volGal<=0||target>=100) return 0;
+  const massG=volGal*L_PER_GAL*brixToSG(brix)*1000;
+  return massG*(target-brix)/(100-target);
+}
+// Water to drop a must to a target Brix
+function dilutionGal(volGal,brix,target){
+  if(target>=brix||target<=0||volGal<=0) return 0;
+  return volGal*(brix-target)/target;
+}
+// Tartaric acid: 1 g/L raises TA by 1 g/L
+function tartaricGrams(volGal,ta,target){
+  if(target<=ta||volGal<=0) return 0;
+  return (target-ta)*volGal*L_PER_GAL;
+}
+// Deacidification, per gallon, to drop TA by 1 g/L
+const DEACID_AGENTS={
+  khco3:{name:'Potassium bicarbonate',perGalPerGL:3.4,note:'Gentler on pH than chalk. Cold stabilize afterward — it throws potassium bitartrate.'},
+  caco3:{name:'Calcium carbonate (chalk)',perGalPerGL:2.5,note:'Raises pH harder and can throw calcium tartrate for months. Use on juice, not finished wine.'},
+};
+function deacidGrams(volGal,ta,target,agent){
+  if(target>=ta||volGal<=0) return 0;
+  const a=DEACID_AGENTS[agent]||DEACID_AGENTS.khco3;
+  return (ta-target)*volGal*a.perGalPerGL;
+}
+function abvFromSG(start,end){ return (start-end)*131.25; }
+function abvFromBrix(start,end){ return (brixToSG(start)-brixToSG(end))*131.25; }
+// Pearson square: how much of A and B to hit a target between them
+function pearson(a,b,target){
+  if(a===b) return null;
+  const lo=Math.min(a,b), hi=Math.max(a,b);
+  if(target<lo||target>hi) return null;
+  const partsA=Math.abs(target-b), partsB=Math.abs(a-target), tot=partsA+partsB;
+  if(tot===0) return null;
+  return {pctA:(partsA/tot)*100, pctB:(partsB/tot)*100};
+}
+
+function renderCalculatorsTab(){
+  // ── 1. SO₂ ──
+  const sVol=calcNum('so2Vol'), sPH=calcNum('so2pH'), sFree=calcNum('so2Free');
+  const sStyle=calcVal('so2Style');
+  const sTarget=sStyle==='red'?0.5:sStyle==='white'?0.8:calcNum('so2Target');
+  const needFree=freeSO2Needed(sTarget,sPH);
+  const curMol=molecularSO2(sFree,sPH);
+  const gap=Math.max(0,needFree-sFree);
+  const kms=kmsGrams(gap,sVol);
+  const so2Card=calcCard('🧪 SO₂ Addition (molecular target)',
+    `<div class="g3">
+      ${calcIn('so2Vol','Volume (gal)',{step:'0.25',min:0})}
+      ${calcIn('so2pH','Wine pH',{step:'0.01',min:2.5})}
+      ${calcIn('so2Free','Current free SO₂ (ppm)',{step:'1',min:0})}
+      ${calcSel('so2Style','Target molecular SO₂',[['red','Red — 0.5 ppm'],['white','White / rosé — 0.8 ppm'],['custom','Custom…']])}
+      ${sStyle==='custom'?calcIn('so2Target','Custom molecular target (ppm)',{step:'0.05',min:0}):''}
+    </div>
+    <div class="g2 mt8">
+      <div>${calcOut('Add potassium metabisulfite', kms>0?`${g2(kms)} g`:'Nothing needed',
+        kms>0?`${g2(kms/sVol)} g/gal · raises free SO₂ by ${Math.round(gap)} ppm`:'Free SO₂ is already at or above target')}</div>
+      <div>${calcOut('Free SO₂ target', `${Math.round(needFree)} ppm`,
+        `You have ${Math.round(sFree)} ppm — molecular right now is ${curMol.toFixed(2)} ppm`)}</div>
+    </div>
+    <div class="sdiv">Free SO₂ needed for ${sTarget} ppm molecular, by pH</div>
+    <table class="tbl"><thead><tr>${[3.0,3.2,3.4,3.6,3.8,4.0].map(p=>`<th>pH ${p.toFixed(1)}</th>`).join('')}</tr></thead>
+    <tbody><tr>${[3.0,3.2,3.4,3.6,3.8,4.0].map(p=>{
+      const hit=Math.abs(p-sPH)<0.1;
+      return `<td style="${hit?'background:var(--gold-lt);font-weight:bold':''}">${Math.round(freeSO2Needed(sTarget,p))} ppm</td>`;
+    }).join('')}</tr></tbody></table>`,
+    'Potassium metabisulfite is taken as 57.6% SO₂ by weight. Check the maths against the checklist figure: 50 ppm into 5 gallons works out to 1.64 g, which is the 1.6 g the MoreWine sheet calls for. Free SO₂ on its own is not protection — at pH 3.8 you need roughly twice the free SO₂ you would at pH 3.2 for the same molecular level.');
+
+  // ── 2. Chaptalization ──
+  const cVol=calcNum('chapVol'), cB=calcNum('chapBrix'), cT=calcNum('chapTarget');
+  const sugar=chaptalGrams(cVol,cB,cT);
+  const chapCard=calcCard('🍬 Chaptalization — raise Brix',
+    `<div class="g3">
+      ${calcIn('chapVol','Must volume (gal)',{step:'0.25',min:0})}
+      ${calcIn('chapBrix','Current Brix',{step:'0.1',min:0})}
+      ${calcIn('chapTarget','Target Brix',{step:'0.1',min:0})}
+    </div>
+    <div class="g2 mt8">
+      <div>${calcOut('Add sugar', sugar>0?`${g2(sugar)} g`:'Nothing needed',
+        sugar>0?`${g2(sugar/453.592)} lbs · ${g2(sugar/cVol)} g per gallon`:'Already at or above target')}</div>
+      <div>${calcOut('Potential alcohol', `${g2(cT*0.55)}% ABV`,
+        `Up from ${g2(cB*0.55)}% · the sugar itself adds about ${g2(sugar/1587)} L of volume`)}</div>
+    </div>`,
+    'Worked as a mass balance rather than a rule of thumb, so it stays accurate at high Brix where the shortcuts drift. Dissolve the sugar in a little juice first and add it in stages — a single large dose can shock the yeast and will raise your volume slightly.');
+
+  // ── 3. Water addition ──
+  const dVol=calcNum('dilVol'), dB=calcNum('dilBrix'), dT=calcNum('dilTarget');
+  const water=dilutionGal(dVol,dB,dT);
+  const dilCard=calcCard('💧 Water Addition — lower Brix',
+    `<div class="g3">
+      ${calcIn('dilVol','Must volume (gal)',{step:'0.25',min:0})}
+      ${calcIn('dilBrix','Current Brix',{step:'0.1',min:0})}
+      ${calcIn('dilTarget','Target Brix',{step:'0.1',min:0})}
+    </div>
+    <div class="g2 mt8">
+      <div>${calcOut('Add water', water>0?`${g2(water)} gal`:'Nothing needed',
+        water>0?`${g2(water*3.785)} L · finished volume ${g2(dVol+water)} gal`:'Already at or below target')}</div>
+      <div>${calcOut('Potential alcohol', `${g2(dT*0.55)}% ABV`, `Down from ${g2(dB*0.55)}%`)}</div>
+    </div>`,
+    `Water dilutes everything, not just sugar. A ${water>0?g2((water/(dVol+water))*100):0}% addition drops your TA by the same proportion, so re-test acid afterward and expect to add tartaric back. Check your local rules before doing this on anything you intend to sell.`);
+
+  // ── 4. Acid addition ──
+  const aVol=calcNum('acidVol'), aTA=calcNum('acidTA'), aT=calcNum('acidTarget');
+  const tart=tartaricGrams(aVol,aTA,aT);
+  const acidCard=calcCard('🍋 Acid Addition — raise TA',
+    `<div class="g3">
+      ${calcIn('acidVol','Volume (gal)',{step:'0.25',min:0})}
+      ${calcIn('acidTA','Current TA (g/L)',{step:'0.1',min:0})}
+      ${calcIn('acidTarget','Target TA (g/L)',{step:'0.1',min:0})}
+    </div>
+    <div class="g2 mt8">
+      <div>${calcOut('Add tartaric acid', tart>0?`${g2(tart)} g`:'Nothing needed',
+        tart>0?`${g2(tart/aVol)} g/gal · raises TA by ${g2(aT-aTA)} g/L`:'Already at or above target')}</div>
+      <div>${calcOut('Rule of thumb', '3.79 g/gal', 'raises TA by 1 g/L — tartaric only')}</div>
+    </div>`,
+    'Tartaric is the acid to use: malic gets eaten by MLF and citric can be metabolized into acetic by lactic bacteria. Bench trial on a measured sample before you commit the batch, and add before fermentation where you can — post-ferment additions taste sharper for the same number.');
+
+  // ── 5. Deacidification ──
+  const xVol=calcNum('deacidVol'), xTA=calcNum('deacidTA'), xT=calcNum('deacidTarget');
+  const agentKey=calcVal('deacidAgent'), agent=DEACID_AGENTS[agentKey]||DEACID_AGENTS.khco3;
+  const deacid=deacidGrams(xVol,xTA,xT,agentKey);
+  const drop=xTA-xT;
+  const deacidCard=calcCard('🧂 Deacidification — lower TA',
+    `<div class="g3">
+      ${calcIn('deacidVol','Volume (gal)',{step:'0.25',min:0})}
+      ${calcIn('deacidTA','Current TA (g/L)',{step:'0.1',min:0})}
+      ${calcIn('deacidTarget','Target TA (g/L)',{step:'0.1',min:0})}
+      ${calcSel('deacidAgent','Agent',Object.entries(DEACID_AGENTS).map(([k,a])=>[k,a.name]))}
+    </div>
+    <div class="g2 mt8">
+      <div>${calcOut(`Add ${agent.name.toLowerCase()}`, deacid>0?`${g2(deacid)} g`:'Nothing needed',
+        deacid>0?`${g2(deacid/xVol)} g/gal · drops TA by ${g2(drop)} g/L`:'Already at or below target')}</div>
+      <div>${calcOut('pH will rise', `≈ +${g2(drop*0.1)}`, 'roughly 0.1 pH per 1 g/L of TA removed')}</div>
+    </div>
+    ${drop>2?`<div class="warn-note mt8" style="font-size:11px">⚠ You are asking for a ${g2(drop)} g/L drop. Past about 2 g/L in one go the wine goes flat and hollow and the pH climbs into microbial trouble. Split it across two additions with a taste in between, or let MLF do part of the work — it takes roughly 1–3 g/L off on its own.</div>`:''}`,
+    agent.note+' Dissolve in a little wine, add slowly, and stir — it foams. Always re-test rather than trusting the calculation.');
+
+  // ── 6. ABV ──
+  const abvMode=calcVal('abvMode');
+  const abv=abvMode==='sg'?abvFromSG(calcNum('abvStartSG'),calcNum('abvEndSG'))
+                          :abvFromBrix(calcNum('abvStartBrix'),calcNum('abvEndBrix'));
+  const abvCard=calcCard('🍷 Alcohol by Volume',
+    `<div class="g3">
+      ${calcSel('abvMode','Readings',[['sg','Specific gravity'],['brix','Brix / hydrometer']])}
+      ${abvMode==='sg'?calcIn('abvStartSG','Starting SG',{step:'0.001'})+calcIn('abvEndSG','Final SG',{step:'0.001'})
+                      :calcIn('abvStartBrix','Starting Brix',{step:'0.1'})+calcIn('abvEndBrix','Final Brix',{step:'0.1'})}
+    </div>
+    <div class="g2 mt8">
+      <div>${calcOut('Alcohol', `${g2(abv)}% ABV`, abvMode==='sg'?'(start − final) × 131.25':'Brix converted to SG, then × 131.25')}</div>
+      <div>${calcOut('Quick check', `${g2((abvMode==='sg'?sgToBrix(calcNum('abvStartSG')):calcNum('abvStartBrix'))*0.55)}% ABV`,
+        'starting Brix × 0.55 — the field estimate')}</div>
+    </div>`,
+    'A dry wine finishes below 1.000 SG, or around −1 to −2 on the Brix scale, because alcohol is lighter than water. Hydrometers read Brix wrong once alcohol is present, so the finishing number is an approximation either way — for anything you need to be exact about, use a vinometer or send a sample out.');
+
+  // ── 7. Pearson square ──
+  const pA=calcNum('psA'), pB=calcNum('psB'), pT=calcNum('psTarget'), pV=calcNum('psVol');
+  const ps=pearson(pA,pB,pT);
+  const psCard=calcCard('⚖️ Blending — Pearson square',
+    `<div class="g3">
+      ${calcIn('psA','Wine A value',{step:'0.1'})}
+      ${calcIn('psB','Wine B value',{step:'0.1'})}
+      ${calcIn('psTarget','Target value',{step:'0.1'})}
+      ${calcIn('psVol','Total blend volume (gal)',{step:'0.25',min:0})}
+    </div>
+    ${ps?`<div class="g2 mt8">
+      <div>${calcOut('Wine A', `${g2(ps.pctA)}%`, `${g2(pV*ps.pctA/100)} gal`)}</div>
+      <div>${calcOut('Wine B', `${g2(ps.pctB)}%`, `${g2(pV*ps.pctB/100)} gal`)}</div>
+    </div>`
+    :`<div class="warn-note mt8" style="font-size:11px">⚠ ${pA===pB?'Both wines have the same value — there is nothing to blend toward.':`A target of ${pT} sits outside the range ${Math.min(pA,pB)} to ${Math.max(pA,pB)}. Blending can only land you between your two components.`}</div>`}`,
+    'Works for any measure that blends linearly by volume — Brix, TA, alcohol, residual sugar. It does not work for pH, which is logarithmic: blend by TA and measure the pH afterward. Bench trial the result before you commit tanks.');
+
+  // ── 8. Yield ──
+  const yLbs=calcNum('yieldLbs'), yRate=calcNum('yieldRate');
+  const ySec=calcVal('yieldSecondary')==='yes';
+  const yMust=yRate>0?yLbs/yRate:0;
+  const yPress=yMust*LOSS.pToS;
+  const yAge=ySec?yPress*LOSS.sToA:yPress;
+  const yBot=yAge*LOSS.aToB;
+  const yieldCard=calcCard('📦 Yield — fruit to bottles',
+    `<div class="g3">
+      ${calcIn('yieldLbs','Fruit (lbs)',{step:'10',min:0})}
+      ${calcIn('yieldRate','Extraction (lbs/gal)',{step:'0.5',min:0.1})}
+      ${calcSel('yieldSecondary','Secondary vessel',[['yes','Yes — consecutive MLF'],['no','No — press straight to aging']])}
+    </div>
+    <table class="tbl mt8"><thead><tr><th>Stage</th><th>Volume</th><th>Loss</th></tr></thead><tbody>
+      <tr><td class="txt-b">Must in the fermenter</td><td>${fmtGal(yMust)}</td><td class="txt-m">—</td></tr>
+      <tr><td class="txt-b">Off the press</td><td>${fmtGal(yPress)}</td><td class="txt-m">${Math.round((1-LOSS.pToS)*100)}%</td></tr>
+      ${ySec?`<tr><td class="txt-b">Racked to aging</td><td>${fmtGal(yAge)}</td><td class="txt-m">${Math.round((1-LOSS.sToA)*100)}%</td></tr>`:''}
+      <tr><td class="txt-b">Into bottle</td><td>${fmtGal(yBot)}</td><td class="txt-m">${Math.round((1-LOSS.aToB)*100)}%</td></tr>
+    </tbody><tfoot><tr style="border-top:2px solid var(--border);font-weight:bold">
+      <td>Bottles (750 mL)</td><td colspan="2">${Math.floor(yBot*BPGAL)} bottles · ${g2(Math.floor(yBot*BPGAL)/12)} cases</td>
+    </tr></tfoot></table>
+    ${!ySec?'<div class="info-note mt8" style="font-size:11px">Skipping the secondary skips a racking, which is worth about 5% more wine in the bottle.</div>':''}`,
+    `Uses the same loss constants as the rest of the app. Extraction varies a lot — whole clusters run nearer 16 lbs/gal, destemmed reds around 13, and a hard press on whites can get down to 11. If you have measured your own on the Tracking tab, use that number here.`);
+
+  return `<div>
+    <div class="panel">
+      <div class="ph"><div class="pt">🧮 Calculators</div>
+        <button class="btn btn-s btn-sm" onclick="resetCalcs()">Reset all</button></div>
+      <div class="info-note">Bench maths for the decisions you make with a hydrometer in one hand. Every figure shows its working. These are calculations, not permission — bench trial anything that goes into a batch you care about.</div>
+    </div>
+    ${so2Card}${chapCard}${dilCard}${acidCard}${deacidCard}${abvCard}${psCard}${yieldCard}
   </div>`;
 }
 

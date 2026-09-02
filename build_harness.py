@@ -4,10 +4,10 @@ epilogue, so the Node harness can reach bindings that let/const keep in the
 script's lexical scope."""
 import re, io, sys
 
-html = io.open('index_new.html', encoding='utf-8').read()
+html = io.open('index.html', encoding='utf-8').read()
 m = re.search(r'<script>\n(.*)\n</script>', html, re.S)
 if not m:
-    print('no script block found'); sys.exit(1)
+    print('no <script> block found in index.html'); sys.exit(1)
 src = m.group(1)
 io.open('app.js', 'w', encoding='utf-8').write(src)
 
