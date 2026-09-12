@@ -1266,6 +1266,452 @@ t('switching to Calculators clears the open protocol', () => {
   reset();
 });
 
+/* ══════════════════════════════════════════════════════════
+   FEATURE — Co-fermentation
+   ══════════════════════════════════════════════════════════ */
+
+// w1 ships as a Bordeaux blend: g1 Cabernet 70% (500 lbs @ 13, 25 Bx),
+// g2 Merlot 30% (175 lbs @ 13, 24 Bx). Flipping it to a co-ferment gives a
+// clean two-variety case with equal yields, so the volume and weight bases
+// agree and any divergence is a real bug.
+const mkCo = (proto, basis) => {
+  reset();
+  const w = S().wines[0];
+  A.setBlendMode(w.id, 'coferment');
+  w.agingVolumeGal = 30;
+  w.cofermentProtocolId = proto || 'red-classic-ml';
+  w.ratioBasis = basis || 'volume';
+  w.yeastId = 'mj-vr21';
+  return w;
+};
+
+/* ── model & migration ── */
+t('old profiles migrate to separate-ferment blends', () => {
+  reset();
+  delete S().wines[0].blendMode; delete S().wines[0].ratioBasis;
+  A.migrateState();
+  eq(S().wines[0].blendMode, 'separate');
+  eq(S().wines[0].ratioBasis, 'volume');
+  ok(!A.isCoferment(S().wines[0]), 'a migrated blend must not become a co-ferment');
+  reset();
+});
+t('migrateState backfills the co-ferment protocol slots as null', () => {
+  reset();
+  eq(S().wines[0].cofermentProtocolId, null);
+  eq(S().wines[0].cofermentRoseProtocolId, null);
+});
+t('isCoferment only fires on blends explicitly switched over', () => {
+  reset();
+  ok(!A.isCoferment(S().wines[0]), 'a separate blend is not a co-ferment');
+  ok(!A.isCoferment(S().wines[1]), 'a single varietal is never a co-ferment');
+  A.setBlendMode(S().wines[0].id, 'coferment');
+  ok(A.isCoferment(S().wines[0]));
+  A.setBlendMode(S().wines[0].id, 'separate');
+  ok(!A.isCoferment(S().wines[0]), 'switching back must restore the separate ferment');
+  reset();
+});
+t('switching to co-ferment keeps the varieties and their ratios', () => {
+  const w = mkCo();
+  eq(w.components.length, 2);
+  eq(w.components.map(c => c.ratio), [70, 30]);
+  reset();
+});
+t('a co-ferment drops per-variety tank splits and bleeds', () => {
+  reset();
+  const w = S().wines[0];
+  w.components[0].useTankSplit = true;
+  w.components[0].hasRose = true;
+  A.setBlendMode(w.id, 'coferment');
+  ok(!w.components[0].useTankSplit, 'one vessel cannot hold a per-variety tank split');
+  ok(!w.components[0].hasRose, 'a bleed comes off the whole co-ferment, not one variety');
+  reset();
+});
+t('a co-ferment inherits a yeast from its components if it has none', () => {
+  reset();
+  const w = S().wines[0];
+  w.yeastId = null;
+  A.setBlendMode(w.id, 'coferment');
+  eq(w.yeastId, 'mj-vr21');
+  reset();
+});
+
+/* ── proportions ── */
+t('volume basis: shares are read straight off the ratios', () => {
+  const w = mkCo('red-classic-ml', 'volume');
+  const mix = A.cofermentMix(w);
+  near(mix.comps[0].volShare, 0.7, 0.001);
+  near(mix.comps[1].volShare, 0.3, 0.001);
+  near(mix.lbsPerGal, 13, 0.001, 'equal yields blend to the same rate');
+  reset();
+});
+t('ratios that do not total 100 are still normalised', () => {
+  const w = mkCo();
+  w.components[0].ratio = 35; w.components[1].ratio = 15;   // same 70/30, half scale
+  const mix = A.cofermentMix(w);
+  near(mix.comps[0].volShare, 0.7, 0.001);
+  near(mix.comps[1].volShare, 0.3, 0.001);
+  reset();
+});
+t('mixing juice with whole grapes splits volume and weight apart', () => {
+  const w = mkCo('red-classic-ml', 'volume');
+  S().grapes[1].form = 'juice'; A.migrateState();            // Merlot arrives as juice, 1:1
+  const byVol = A.cofermentMix(w);
+  near(byVol.comps[0].volShare, 0.7, 0.001);
+  near(byVol.lbsPerGal, 0.7 * 13 + 0.3 * 1, 0.001);
+  w.ratioBasis = 'weight';
+  const byWt = A.cofermentMix(w);
+  near(byWt.comps[0].weightShare, 0.7, 0.001);
+  near(byWt.comps[0].volShare, (0.7 / 13) / (0.7 / 13 + 0.3 / 1), 0.001,
+    'by weight, the juice dominates the vessel');
+  ok(byWt.comps[0].volShare < 0.2, '70% of the fruit by weight is a small share of the must here');
+  reset();
+});
+t('an empty variety slot never skews the proportions', () => {
+  const w = mkCo();
+  w.components.push({ grapeId: null, ratio: 0, tanks: [] });
+  const mix = A.cofermentMix(w);
+  eq(mix.comps.length, 3, 'rows stay index-aligned with components');
+  near(mix.comps[0].volShare, 0.7, 0.001);
+  eq(mix.comps[2].volShare, 0);
+  reset();
+});
+t('starting Brix is the volume-weighted average', () => {
+  const w = mkCo();
+  near(A.cofermentBrix(w), 0.7 * 25 + 0.3 * 24, 0.01);
+  reset();
+});
+
+/* ── the volume chain ── */
+t('a co-ferment back-calculates one chain from the aging vessel', () => {
+  const w = mkCo('red-classic-ml');                 // consecutive MLF → secondary
+  const c = A.calcWine(w);
+  ok(c.isCoferment, 'calcWine should route to the co-ferment engine');
+  near(c.secondaryGal, 30 / 0.95, 0.01);
+  near(c.totalMustGal, 30 / 0.95 / 0.85, 0.01);
+  near(c.grapsNeeded, (30 / 0.95 / 0.85) * 13, 0.1);
+  reset();
+});
+t('co-inoculated MLF removes the secondary and one racking', () => {
+  const withSec = A.calcWine(mkCo('red-classic-ml'));
+  const noSec = A.calcWine(mkCo('red-coinoc-ml'));
+  ok(withSec.hasSecondary, 'sequential MLF needs its own vessel');
+  ok(!noSec.hasSecondary, 'co-inoculated MLF finishes with the primary');
+  near(noSec.totalMustGal, 30 / 0.85, 0.01);
+  ok(noSec.totalMustGal < withSec.totalMustGal,
+    'skipping a racking means less fruit for the same aging vessel');
+  eq(noSec.bottles, withSec.bottles, 'the aging vessel, not the chain, sets the bottle count');
+  reset();
+});
+t('the fruit bill splits by proportion', () => {
+  const c = A.calcWine(mkCo());
+  near(c.components[0].needLbs, c.totalMustGal * 0.7 * 13, 0.1);
+  near(c.components[1].needLbs, c.totalMustGal * 0.3 * 13, 0.1);
+  near(c.components[0].needLbs + c.components[1].needLbs, c.grapsNeeded, 0.1);
+  reset();
+});
+t('the shortest variety caps the batch', () => {
+  const w = mkCo();
+  S().grapes[1].pounds = 40;                        // not enough Merlot for 30%
+  const c = A.calcWine(w);
+  ok(!c.sufficient, 'a short variety makes the whole co-ferment short');
+  ok(c.components[1].shortLbs > 0);
+  ok(c.components[0].sufficient, 'the other variety is still fine on its own');
+  near(c.maxMustGal, 40 / (0.3 * 13), 0.05,
+    'holding the recipe, the Merlot decides how big the batch can be');
+  ok(c.maxMustGal < c.totalMustGal);
+  reset();
+});
+t('a co-ferment reports no single-variety excess', () => {
+  const c = A.calcWine(mkCo());
+  c.components.forEach(cc => eq(cc.excessGal, 0));
+  eq(A.calcSVConsolidation().size, 0, 'nothing is held back to consolidate');
+  reset();
+});
+t('saignée off a co-ferment enlarges the must and yields a rosé', () => {
+  const w = mkCo();
+  const plain = A.calcWine(w).totalMustGal;
+  w.hasRose = true; w.saigneePercent = 10;
+  const c = A.calcWine(w);
+  near(c.totalMustGal, plain / 0.9, 0.01);
+  near(c.roseMustGal, c.totalMustGal * 0.1, 0.01);
+  ok(c.roseCalc && c.roseCalc.bottles > 0, 'the bleed should yield bottles');
+  reset();
+});
+
+/* ── allocation ── */
+t('a co-ferment claims exactly its recipe', () => {
+  const w = mkCo();
+  const c = A.calcWine(w);
+  const alloc = A.calcGrapeAllocations();
+  near(alloc.get('g1').allocations.find(a => a.wineId === w.id).requested,
+    c.components[0].needLbs, 0.1);
+  near(alloc.get('g2').allocations.find(a => a.wineId === w.id).requested,
+    c.components[1].needLbs, 0.1);
+  reset();
+});
+t('leftover fruit does not get swept into a co-ferment', () => {
+  const w = mkCo();
+  const c = A.calcWine(w);
+  const alloc = A.calcGrapeAllocations();
+  ok(alloc.get('g1').remainingLbs > 1,
+    'the Cabernet a co-ferment does not need must stay free');
+  near(alloc.get('g1').usedLbs, c.components[0].needLbs, 0.1);
+  reset();
+});
+t('a separate blend still absorbs leftovers as single-variety wine', () => {
+  reset();
+  const alloc = A.calcGrapeAllocations();
+  near(alloc.get('g1').remainingLbs, 0, 0.01,
+    'the separate-ferment path is unchanged — leftovers become SV wine');
+  reset();
+});
+t('an earlier wine still gets first claim on a shared grape', () => {
+  const w = mkCo();
+  S().wines.push({ id: 'wX', name: 'Merlot Solo', color: 'red', wineType: 'single',
+    lbsPerGal: 13, grapeId: 'g2', agingEquipmentId: null, agingVolumeGal: 12,
+    components: [], primaryEquipmentId: null, secondaryEquipmentId: null,
+    hasRose: false, saigneePercent: 0, roseAgingEquipmentId: null, roseAgingVolumeGal: 0,
+    roseYeastId: null, yeastId: 'mj-vr5', useTankSplit: false, tanks: [] });
+  A.migrateState();
+  const alloc = A.calcGrapeAllocations();
+  const co = alloc.get('g2').allocations.find(a => a.wineId === w.id);
+  const solo = alloc.get('g2').allocations.find(a => a.wineId === 'wX');
+  near(co.allocated, co.requested, 0.1, 'the co-ferment is first in the list');
+  ok(solo.allocated < solo.requested, 'the later wine takes what is left');
+  reset();
+});
+
+/* ── tracking ── */
+t('a co-ferment is one batch, not one per variety', () => {
+  const w = mkCo();
+  const lines = A.getTrackingLines();
+  const co = lines.filter(l => l.coWineId === w.id);
+  eq(co.length, 1, 'one vessel, one log');
+  eq(co[0].key, 'co::' + w.id);
+  near(co[0].mustGal, A.calcWine(w).totalMustGal, 0.01);
+  ok(!lines.some(l => !l.coWineId && (l.grapeId === 'g1' || l.grapeId === 'g2')),
+    'the varieties must not also appear as separate batches');
+  reset();
+});
+t('the batch is named for the varieties in the vessel', () => {
+  mkCo();
+  const line = A.getTrackingLines().find(l => l.coWineId);
+  ok(A.trackLineName(line).includes('Cabernet Sauvignon'), 'names the first variety');
+  ok(A.trackLineName(line).includes('Merlot'), 'names the second');
+  ok(A.trackLineName(line).includes('co-ferment'), 'says what it is');
+  reset();
+});
+t('the co-ferment protocol drives its tracking record', () => {
+  const w = mkCo('red-coinoc-ml');
+  const key = 'co::' + w.id;
+  const rec = A.trackingRec(key);
+  ok(rec.ml.enabled, 'co-inoculated protocols still run an ML');
+  eq(rec.ml.timing, 'simultaneous');
+  ok(!A.recNeedsSecondary(rec, key), 'co-inoculation skips the secondary vessel');
+  eq(A.trackStages(rec, key), ['primary', 'aging', 'bottled']);
+  reset();
+});
+t('sequential MLF puts the secondary and ML stages back', () => {
+  const w = mkCo('red-classic-ml');
+  const key = 'co::' + w.id;
+  const rec = A.trackingRec(key);
+  eq(rec.ml.timing, 'post');
+  ok(A.recNeedsSecondary(rec, key));
+  eq(A.trackStages(rec, key), ['primary', 'secondary', 'ml', 'aging', 'bottled']);
+  reset();
+});
+t('a manual ML override still wins on a co-ferment', () => {
+  const w = mkCo('red-classic-ml');
+  const key = 'co::' + w.id;
+  const rec = A.trackingRec(key);
+  rec.mlManual = true; rec.ml = { enabled: true, timing: 'simultaneous' };
+  ok(!A.recNeedsSecondary(rec, key), 'the winemaker overrides the protocol');
+  reset();
+});
+t('stage volumes follow the co-ferment chain', () => {
+  const w = mkCo('red-coinoc-ml');
+  const key = 'co::' + w.id;
+  const line = A.getTrackingLines().find(l => l.key === key);
+  const v = A.stageVolumes(line.mustGal, A.recNeedsSecondary(A.trackingRec(key), key));
+  near(v.aging, line.mustGal * 0.85, 0.01, 'no secondary means no second racking loss');
+  reset();
+});
+t('a co-ferment never opens the Blend Lab', () => {
+  const w = mkCo();
+  ok(!A.getBlendTargets().some(b => b.wine.id === w.id),
+    'there is nothing to assemble — it was never apart');
+  reset();
+});
+t('the batch label reads sensibly from a bare key', () => {
+  const w = mkCo();
+  ok(A.trackKeyLabel('co::' + w.id).includes('co-ferment'));
+  reset();
+});
+
+/* ── supplies ── */
+t('protocol additions scale off the whole co-ferment volume', () => {
+  const w = mkCo('red-classic-ml');
+  const must = A.calcWine(w).totalMustGal;
+  const line = A.getTrackingLines().find(l => l.coWineId);
+  const vols = A.lineVolumes(line);
+  near(vols.gal_must, must, 0.01);
+  near(vols.gal_wine, must * 0.85, 0.01);
+  near(vols.lbs, must * 13, 0.1, 'lbs use the blended yield rate');
+  reset();
+});
+t('the shopping list bills the co-ferment once', () => {
+  const w = mkCo();
+  const list = A.buildShoppingList({ includeOptional: false, margin: 0.1 });
+  const uses = [].concat.apply([], list.map(r => r.uses || []));
+  const mine = uses.filter(u => String(u.batch).includes('co-ferment'));
+  ok(mine.length > 0, 'the co-ferment should reach the shopping list');
+  ok(!uses.some(u => u.batch === 'Merlot'),
+    'a co-fermented variety must not be billed again on its own');
+  reset();
+});
+t('yeast demand counts one inoculation for the vessel', () => {
+  const w = mkCo();
+  const d = A.getYeastDemand().find(y => y.yeastId === 'mj-vr21');
+  ok(d, 'the co-ferment yeast should show demand');
+  near(d.totalGal, A.calcWine(w).totalMustGal, 0.01);
+  reset();
+});
+
+/* ── harvest windows ── */
+t('non-overlapping harvest windows are flagged', () => {
+  const w = mkCo();
+  S().grapes[0].harvestStartMonth = 'October'; S().grapes[0].harvestStartPeriod = 'Mid';
+  S().grapes[0].harvestEndMonth = 'October';   S().grapes[0].harvestEndPeriod = 'Late';
+  S().grapes[1].harvestStartMonth = 'August';  S().grapes[1].harvestStartPeriod = 'Early';
+  S().grapes[1].harvestEndMonth = 'August';    S().grapes[1].harvestEndPeriod = 'Late';
+  const clash = A.cofermentHarvestClash(w);
+  ok(clash, 'August fruit cannot wait for mid-October fruit');
+  eq(clash.early, 'Merlot'); eq(clash.late, 'Cabernet Sauvignon');
+  reset();
+});
+t('overlapping harvest windows pass quietly', () => {
+  const w = mkCo();
+  eq(A.cofermentHarvestClash(w), null, 'the shipped windows overlap');
+  reset();
+});
+
+/* ── render paths ── */
+t('the co-ferment editor renders', () => {
+  const w = mkCo();
+  S().ui.tab = 'wines'; S().ui.wineId = w.id;
+  const html = A.renderTab();
+  ok(html.includes('Co-Ferment Composition'), 'composition section');
+  ok(html.includes('Proportion %'), 'proportion input');
+  ok(html.includes('setBlendMode'), 'the mode switch');
+  ok(html.includes('setRatioBasis'), 'the volume/weight switch');
+  ok(html.includes('Co-Ferment Summary'), 'summary box');
+  ok(!html.includes('Blend Ratio %'), 'the separate-ferment fields should be gone');
+  reset();
+});
+t('the editor shows the secondary as skipped under co-inoculation', () => {
+  const w = mkCo('red-coinoc-ml');
+  S().ui.tab = 'wines'; S().ui.wineId = w.id;
+  const html = A.renderTab();
+  ok(html.includes('Straight to aging'), 'the protocol panel states the consequence');
+  ok(html.includes('press straight to aging'), 'the vessel slot is closed off');
+  reset();
+});
+t('the editor offers a secondary vessel under sequential MLF', () => {
+  const w = mkCo('red-classic-ml');
+  S().ui.tab = 'wines'; S().ui.wineId = w.id;
+  const html = A.renderTab();
+  ok(html.includes('Secondary vessel'), 'the protocol panel says a vessel is needed');
+  ok(html.includes("'secondaryEquipmentId'"), 'and the picker is live');
+  reset();
+});
+t('a short co-ferment explains its ceiling', () => {
+  const w = mkCo();
+  S().grapes[1].pounds = 40;
+  S().ui.tab = 'wines'; S().ui.wineId = w.id;
+  const html = A.renderTab();
+  ok(html.includes('The fruit runs out'), 'the summary should say so plainly');
+  reset();
+});
+t('every tab still renders with a co-ferment in the cellar', () => {
+  mkCo();
+  ['wines', 'grapes', 'protocols', 'tracking', 'calculators', 'supplies', 'flowchart'].forEach(tab => {
+    S().ui.tab = tab;
+    const html = A.renderTab();
+    ok(typeof html === 'string' && html.length > 50, tab + ' produced no markup');
+  });
+  S().ui.tab = 'wines';
+  reset();
+});
+t('the tracking detail opens on a co-ferment batch', () => {
+  const w = mkCo();
+  S().ui.tab = 'tracking'; S().ui.trackKey = 'co::' + w.id;
+  const html = A.renderTab();
+  ok(html.includes('co-ferment'), 'the batch is named');
+  ok(html.includes('setCofermentProtocol'), 'the protocol is editable from the log');
+  ok(html.includes('every variety in the vessel'), 'and it says what it governs');
+  S().ui.trackKey = null;
+  reset();
+});
+t('the flowchart draws the co-ferment as one vessel', () => {
+  mkCo();
+  const svg = A.buildSVG();
+  ok(svg.includes('co-ferment'), 'the column is badged');
+  ok(svg.includes('arr-co'), 'the feed arrows are drawn');
+  ok(svg.includes('Cabernet Sauvignon'), 'both varieties still get a node');
+  ok(svg.includes('Merlot'));
+  reset();
+});
+t('a variety used only in a co-ferment still gets exactly one node', () => {
+  const w = mkCo();
+  const svg = A.buildSVG();
+  const count = (svg.match(/>Merlot</g) || []).length;
+  ok(count >= 1, 'the Merlot node exists');
+  ok(count <= 2, 'and it is not duplicated per consumer');
+  reset();
+});
+
+/* ── persistence ── */
+t('co-ferment settings survive a profile round-trip', () => {
+  const w = mkCo('red-coinoc-ml', 'weight');
+  w.cofermentRoseProtocolId = 'rose-saignee';
+  const prof = JSON.parse(JSON.stringify(A.stateToProfile('T', 'pT')));
+  reset();
+  A.loadProfileIntoState(prof);
+  const back = S().wines.find(x => x.id === w.id);
+  eq(back.blendMode, 'coferment');
+  eq(back.ratioBasis, 'weight');
+  eq(back.cofermentProtocolId, 'red-coinoc-ml');
+  ok(A.isCoferment(back));
+  reset();
+});
+t('the separate-ferment blend is untouched by all of this', () => {
+  reset();
+  const c = A.calcWine(S().wines[0]);
+  ok(c.isBlend && !c.isCoferment);
+  ok(c.components[0].blendPortionGal > 0, 'per-variety blend portions still compute');
+  ok(A.getBlendTargets().length === 1, 'it still opens the Blend Lab');
+  reset();
+});
+
+t('a saignée off a co-ferment shows its yield', () => {
+  const w = mkCo();
+  w.hasRose = true; w.saigneePercent = 12; w.roseAgingEquipmentId = 'eq3';
+  S().ui.tab = 'wines'; S().ui.wineId = w.id;
+  const html = A.renderTab();
+  ok(html.includes('Enable Saign'), 'the bleed toggle is there');
+  ok(html.includes('Ros\u00e9 Yield'), 'and the yield box renders off the wine calc');
+  ok(html.includes('carries the same'), 'the note explains what is in the bleed');
+  reset();
+});
+t('a co-ferment is badged as one everywhere it is listed', () => {
+  const w = mkCo();
+  S().ui.tab = 'wines'; S().ui.wineId = w.id;
+  const html = A.renderTab();
+  ok(html.includes('Co-Ferment</span>'), 'the detail header');
+  ok(html.includes('>co-ferment</span>'), 'the sidebar chip');
+  reset();
+});
+
 console.log('');
 failures.forEach(f => console.log('  FAIL  ' + f));
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

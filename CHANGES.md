@@ -1,6 +1,6 @@
-# Build notes — products, volumes, calculators
+# Build notes — co-fermentation
 
-4,901 → 5,484 lines. **145 tests passing.** Run with:
+5,484 → 5,959 lines. **191 tests passing** (145 before). Run with:
 
 ```
 python3 build_harness.py && node test_app.js
@@ -8,120 +8,146 @@ python3 build_harness.py && node test_app.js
 
 ---
 
-## 1. Products are editable
+## The switch
 
-`CHEM_CATALOG` is now the shipped floor, not the ceiling. A new **Product
-Library** panel at the bottom of the Protocols tab lets you add anything you
-actually stock — name, category, unit, pack sizes, notes.
+A blend wine now has a **How It's Made** selector next to Wine Type:
 
-The category is not decoration. It feeds the compatibility engine and the
-shopping list, so a product you file as **Tannin** picks up the 8-hour enzyme
-rule, and one filed as **Nutrient** satisfies the nitrogen check. Pack sizes
-drive the "suggested pack" column.
+- **Blend finished wines** — the existing behaviour, and what every saved
+  project migrates to. Nothing about it changed.
+- **Co-ferment — one vessel** — the varieties go into the primary together,
+  on one yeast, under one protocol, and travel as a single wine to the bottle.
 
-Three things worth knowing:
+Flipping to co-ferment keeps the varieties and their ratios. It pulls a yeast
+and vessels up from the components if the wine level was empty, and clears
+per-variety tank splits and per-variety bleeds, because one fermenter can hold
+neither. Flipping back restores the separate ferment.
 
-- **Renaming follows through.** Change a product's name and every protocol
-  addition that used it is rewritten, and the purchase checkmark moves to the
-  new key. A rename never silently orphans a line on the shopping list.
-- **Deleting is safe.** If a protocol still references a deleted product, it
-  keeps working — the item still totals up, just filed under "Other" with no
-  pack size. The library flags these as orphans so you can re-add them.
-- **The addition dropdown is now grouped by category**, with custom entries
-  marked ✎, and it keeps an orphaned selection selectable rather than silently
-  switching it to something else.
+`migrateState()` backfills `blendMode:'separate'` on every existing wine, so an
+old profile can't accidentally arrive as a co-ferment.
 
-## 2. Actual weights and volumes in Tracking
+## Proportions — volume or weight
 
-New **📏 Actual Weights & Volumes** section, sitting directly under the batch
-header — above the protocol, as the first thing you see.
+You didn't say which basis you think in, so the app carries both. A **Read as**
+selector switches between:
 
-Two headline figures: **fruit on the scale** and **must in the fermenter**, each
-showing the planned number and the percentage you're off it. Enter both and the
-panel computes your **measured extraction rate** in lbs/gal, with a one-click
-link to write it back to the grape so future planning uses the number this fruit
-actually gave rather than the estimate.
+- **% of the must (volume)** — each number is that variety's share of what's in
+  the fermenter. Default.
+- **% of the fruit (weight)** — each number is its share of what went on the
+  scale.
 
-Below that, a **volume log** — a dated row per measurement, with an event type
-(off gross lees, racking, after MLF, cold stabilization, fining, filtration,
-topping, into barrel, at bottling) and a note. Each row shows the change from
-the previous reading in both gallons and percent, and the panel totals the loss
-from must to your latest reading.
+Each variety card shows the *other* figure underneath, so the gap is visible
+rather than silent. With two varieties at the same lbs/gal the two bases agree
+exactly. Make one of them juice and they diverge hard: 70/30 by weight becomes
+roughly 15/85 by volume, because juice is 1:1 and whole grapes are 13:1. That
+is the case the toggle exists for.
 
-The important part is what it feeds. Once a measured must volume exists it
-replaces the planned figure **everywhere downstream** — the stepper's stage
-volumes, the protocol addition doses on that batch, and the Supplies shopping
-list. The doses you're handed are for the wine you actually have. The batch
-header and the tracking card both mark when a volume is measured rather than
-estimated.
+Ratios that don't total 100 are normalised, and an empty variety slot never
+skews the split.
 
-## 3. Calculators tab
+**Starting Brix** is shown as the volume-weighted average of what each variety
+brings in — a planning figure, and the compatibility engine uses it for the
+potential-alcohol checks on the batch.
 
-Eight bench calculations, between Tracking and Supplies. Every one shows its
-working, and inputs persist so switching tabs doesn't lose your place.
+## One chain, not one per variety
+
+A co-ferment back-calculates like a single varietal with a compound grape bill:
+one primary, one loss chain, one aging vessel, then the fruit bill splits by
+proportion.
+
+At a 30-gal aging target with sequential MLF:
 
 | | |
 |---|---|
-| **SO₂ addition** | Molecular target by pH, not just free SO₂. Includes a pH sensitivity table. |
-| **Chaptalization** | Sugar to raise Brix, as a mass balance. |
-| **Water addition** | Water to lower Brix, with the TA dilution warning. |
-| **Acid addition** | Tartaric to raise TA. |
-| **Deacidification** | Potassium bicarbonate or chalk, with the pH shift and a warning past 2 g/L. |
-| **ABV** | From gravity or Brix, plus the ×0.55 field estimate. |
-| **Blending** | Pearson square, with a note that it does not work for pH. |
-| **Yield** | Fruit to bottles through the app's own loss chain. |
+| Secondary | 31.58 gal |
+| Must in the fermenter | 37.15 gal |
+| Fruit | 483 lbs — 338 Cabernet, 145 Merlot |
+| Bottles | ~143 |
 
-The SO₂ one earns its place. Free SO₂ alone tells you almost nothing — at pH 3.8
-you need roughly four times the free SO₂ you'd need at pH 3.2 for the same
-protection. The calculator works backward from a molecular target (0.5 ppm reds,
-0.8 whites) to the free SO₂ you need, then to grams of KMS.
+Switch that protocol to co-inoculated MLF and the secondary vessel disappears,
+one racking loss goes with it, and the same vessel now needs 35.29 gal of must
+instead of 37.15. That's the existing `needsSecondary()` logic reused, not a
+second copy — the co-ferment path and your varietal protocols can't drift
+apart.
 
-### Math verification
+## The shortest variety caps the batch
 
-Every formula is checked against an independent reference, not just against
-itself:
+You can't make up a missing variety with more of another and still have the
+wine you planned. So if one component runs short, the whole co-ferment is
+short, and the summary says how big the batch can actually be at those
+proportions — in gallons and in bottles — rather than just flagging a deficit.
 
-- **KMS**: 50 ppm into 5 gallons → 1.64 g. The MoreWine sheet says 1.6 g, and
-  0.33 g/gal. Matches.
-- **Brix → SG**: within 0.0002 of published tables from 0 to 26 Brix.
-- **Chaptalization**: 1 lb of sugar into 1 gallon of water gives 10.71 Brix by
-  first principles. The calculator agrees to within 6 g.
-- **Dilution**: verified by confirming sugar mass is conserved.
-- **Tartaric**: 3.785 g/gal per 1 g/L — exactly 1 g/L, since a gallon is
-  3.785 L.
-- **ABV**: (1.095 − 0.995) × 131.25 = 13.13%.
-- **Pearson**: 24 and 19 to a target of 22 gives 60/40.
+The allocation engine changed in two places:
 
-One real bug surfaced here. The first `brixToSG` was a fitted polynomial while
-`sgToBrix` was the standard cubic, and the two drifted about 0.15 Brix apart on
-a round trip. `brixToSG` is now the numeric inverse of the cubic, so the two
-directions can't disagree.
+- **Pass 1** treats a co-ferment as one need-based claim, split per grape.
+- **Pass 3** no longer sweeps leftover fruit into a co-ferment. A separate
+  blend can absorb extra fruit as single-variety wine; a co-ferment takes
+  exactly its recipe and no more. Leftovers stay free for another project.
+
+List-order priority is unchanged — an earlier wine still gets first claim.
+
+## Downstream
+
+- **Tracking** — one batch per co-ferment, named for what's in the vessel
+  ("Cabernet Sauvignon + Merlot (co-ferment)"), not one per grape. The ML
+  setting follows the co-ferment's own protocol, and a manual override on the
+  batch still wins. Co-inoculated gives `primary → aging → bottled`;
+  sequential gives `primary → secondary → ml → aging → bottled`.
+- **Supplies** — protocol additions scale off the combined must and use a
+  blended lbs/gal. The varieties are billed once, not again individually.
+  Yeast demand counts one inoculation for the vessel.
+- **Blend Lab** — a co-ferment never appears there. There is nothing to
+  bench-trial; it was never apart.
+- **Flowchart** — one badged column for the vessel, with purple feed arrows
+  from each contributing variety carrying its poundage. Every grape still gets
+  exactly one node, including a variety that exists only inside a co-ferment.
+- **Saignée** — a bleed comes off the assembled must, so the rosé carries the
+  same mix as the red. It gets its own protocol slot and its own yield box.
+
+## Harvest windows
+
+Since the Grapes tab already carries harvest timing, a co-ferment checks that
+its varieties overlap. When they don't, the editor names the pair and which one
+you'd be picking off its own schedule — the Syrah/Viognier problem, where the
+co-ferment only works if you pick the white early with the red.
 
 ---
 
 ## Test coverage added
 
-44 new tests on top of the existing 101.
+46 new tests on top of the existing 145.
 
-**Products** — catalog merging, name collision on add, pack-size parsing and
-sorting, a custom product reaching the shopping list with its own category and
-pack, a custom Tannin triggering the enzyme rule, a custom Nutrient satisfying
-the nitrogen check, rename propagating through builtin edits and custom
-protocols and purchase flags, rename onto an existing name being refused, delete
-leaving the protocol readable, orphan detection, orphans staying selectable in
-the dropdown, profile round-trip.
+**Model** — migration of old blends, `isCoferment` scoping, ratios surviving
+the switch, tank splits and per-variety bleeds being cleared, yeast inheritance.
 
-**Volumes** — empty ledger on a fresh record, measured must overriding planned
-and falling back when cleared, negative values rejected, extraction rate needing
-both figures, writing the rate back to the grape, measured volume changing doses
-by exactly the extra gallons, stepper volumes following, log CRUD, running loss
-percentages, panel ordering above the protocol section, the header "measured"
-flag, profile round-trip, legacy record migration.
+**Proportions** — volume shares, normalisation of ratios that miss 100, the
+juice-versus-grapes divergence in both directions, empty slots staying
+index-aligned, weighted Brix.
 
-**Calculators** — all eight formulas against the reference values above, the
-Brix/SG round trip at seven points, the tab rendering every card, inputs having
-ids so focus survives the re-render, persistence and reset, and a robustness
-sweep feeding blank, negative and non-numeric values into every field.
+**Chain** — back-calculation from the aging vessel, co-inoculation removing the
+secondary and one racking, bottle count staying tied to the vessel, the fruit
+bill splitting by proportion, the short-variety ceiling, no single-variety
+excess, saignée enlarging the must.
+
+**Allocation** — exact claims, leftovers staying free, the separate-blend path
+still absorbing them, list-order priority across a shared grape.
+
+**Tracking** — one batch not many, batch naming, protocol-driven ML in both
+timings, manual override, stage volumes, Blend Lab exclusion, key labels.
+
+**Supplies** — addition scaling, single billing on the shopping list, yeast
+demand.
+
+**Render** — the editor, both secondary states, the shortfall explanation, the
+tracking detail, the flowchart's badge and feed arrows, single-node-per-grape,
+every tab with a co-ferment in the cellar, and the badges.
+
+**Persistence** — a profile round-trip through `blendMode`, `ratioBasis` and
+both protocol slots.
+
+Plus a separate edge-case sweep (not in the suite) over: no components, an
+empty slot, a zero ratio, a single variety, no aging volume, three varieties,
+an inactive grape, an all-juice cellar, weight basis, saignée, no yeast, a
+white protocol on a red wine, and every wine in the cellar co-fermented.
 
 ---
 

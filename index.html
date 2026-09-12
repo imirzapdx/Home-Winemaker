@@ -655,6 +655,13 @@ function migrateState(){
     if(g.protocolId===undefined) g.protocolId = null;      // null → default for its color
     if(g.roseProtocolId===undefined) g.roseProtocolId = null;
   });
+  (S.wines||[]).forEach(w=>{
+    if(w.blendMode!=='coferment') w.blendMode = 'separate'; // every old blend is a separate ferment
+    if(w.ratioBasis!=='weight') w.ratioBasis = 'volume';
+    if(w.cofermentProtocolId===undefined) w.cofermentProtocolId = null;
+    if(w.cofermentRoseProtocolId===undefined) w.cofermentRoseProtocolId = null;
+    if(!Array.isArray(w.components)) w.components = [];
+  });
   (S.grapes||[]).forEach(g=>{
     if(!GRAPE_FORMS[g.form]) g.form = 'grapes';
     if(g.form==='juice'){ g.style=null; g.lbsPerGal=1; }
@@ -1271,6 +1278,98 @@ function blendSplitStage(grapeId){
 }
 
 // ════════════════════════════════════════════
+// CO-FERMENTATION — several grapes, one fermenter
+// ════════════════════════════════════════════
+// A co-ferment is a blend wine whose varieties never ferment apart. They go
+// into the primary together in fixed proportions, share one yeast and one
+// protocol, and travel as a single wine from crush to bottle. Because nothing
+// is held back, there is no single-variety excess to place and no assembly
+// step — the ML decision alone says whether a secondary vessel exists.
+const isCoferment = w => !!(w && w.wineType==='blend' && w.blendMode==='coferment');
+function cofermentProtocolId(w,isRose){
+  if(isRose) return (w&&w.cofermentRoseProtocolId)||'rose-saignee';
+  return (w&&w.cofermentProtocolId)||DEFAULT_PROTOCOL[w&&w.color]||'red-classic-ml';
+}
+function cofermentProtocol(w,isRose){ return getProtocol(cofermentProtocolId(w,isRose)); }
+function cofermentNeedsSecondary(w,isRose){ return needsSecondary(cofermentProtocol(w,isRose)).required; }
+function cofermentChain(w,isRose){
+  return cofermentNeedsSecondary(w,isRose)
+    ? {pToS:LOSS.pToS, sToA:LOSS.sToA}
+    : {pToS:LOSS.pToS, sToA:1};
+}
+// How the proportions are read.
+//   'volume' — each number is that variety's share of the must in the fermenter
+//   'weight' — its share of the fruit on the scale
+// The two only agree when every variety yields the same gallons per pound,
+// which stops being true the moment juice or frozen must joins whole grapes.
+// Rows stay index-aligned with wine.components, empty slots included.
+function cofermentMix(w){
+  const all=(w&&w.components)||[];
+  const totRatio=all.reduce((s,c)=>s+(c.grapeId?(parseFloat(c.ratio)||0):0),0);
+  const rows=all.map(c=>{
+    const g=c.grapeId?grapeById(c.grapeId):null;
+    const ratio=c.grapeId?(parseFloat(c.ratio)||0):0;
+    return {grapeId:c.grapeId||null, grape:g, name:g?g.name:'— select grape —', ratio,
+      share:totRatio>0?ratio/totRatio:0,
+      lbpg:(g?grapeRatio(g):0)||parseFloat(w.lbsPerGal)||13};
+  });
+  if(totRatio<=0) { rows.forEach(r=>{ r.volShare=0; r.weightShare=0; }); return {comps:rows,lbsPerGal:0,basis:(w&&w.ratioBasis)||'volume',totRatio:0}; }
+  if((w&&w.ratioBasis)==='weight'){
+    const denom=rows.reduce((s,r)=>s+(r.lbpg>0?r.share/r.lbpg:0),0);
+    rows.forEach(r=>{ r.weightShare=r.share; r.volShare=denom>0&&r.lbpg>0?(r.share/r.lbpg)/denom:0; });
+    return {comps:rows, lbsPerGal:denom>0?1/denom:0, basis:'weight', totRatio};
+  }
+  const lbpgEff=rows.reduce((s,r)=>s+r.share*r.lbpg,0);
+  rows.forEach(r=>{ r.volShare=r.share; r.weightShare=lbpgEff>0?(r.share*r.lbpg)/lbpgEff:0; });
+  return {comps:rows, lbsPerGal:lbpgEff, basis:'volume', totRatio};
+}
+// What a co-ferment needs, worked back from its aging vessel and split by the
+// proportions. One chain for the whole batch — no per-variety racking maths.
+function cofermentNeed(w){
+  const agingGal=parseFloat(w.agingVolumeGal)||0;
+  const mix=cofermentMix(w);
+  const ch=cofermentChain(w,false);
+  const secondaryGal=ch.sToA?agingGal/ch.sToA:agingGal;
+  const primaryGal=ch.pToS?secondaryGal/ch.pToS:0;
+  const sf=(w.hasRose&&w.saigneePercent>0&&w.color==='red')?Math.min(0.5,Math.max(0,w.saigneePercent/100)):0;
+  const totalMustGal=sf>0?primaryGal/(1-sf):primaryGal;
+  const comps=mix.comps.map(r=>Object.assign({},r,{
+    mustGal:totalMustGal*r.volShare, lbs:totalMustGal*r.volShare*r.lbpg}));
+  return {agingGal, secondaryGal, primaryGal, totalMustGal, roseMustGal:totalMustGal*sf,
+    comps, mix, chain:ch, lbsPerGal:mix.lbsPerGal,
+    totalLbs:comps.reduce((s,c)=>s+c.lbs,0)};
+}
+// Starting Brix — the volume-weighted average of what each variety brings in.
+// A planning figure; the refractometer wins on crush day.
+function cofermentBrix(w){
+  const mix=cofermentMix(w);
+  let num=0,den=0;
+  mix.comps.forEach(r=>{
+    const b=r.grape&&r.grape.targetBrix;
+    if(b==null||b===''||isNaN(+b)) return;
+    num+=(+b)*r.volShare; den+=r.volShare;
+  });
+  return den>0?num/den:null;
+}
+// Fruit has to be on the crush pad at the same time to go in the same vessel.
+// Returns the pair that misses, or null when the windows overlap.
+function cofermentHarvestClash(w){
+  const spans=cofermentMix(w).comps.map(r=>{
+    const g=r.grape; if(!g||r.share<=0) return null;
+    const s=harvestSortKey(g); if(s>=9999) return null;
+    const em=MONTHS.indexOf(g.harvestEndMonth||''), ep=PERIODS.indexOf(g.harvestEndPeriod||'');
+    const e=em<0?s:em*3+(ep<0?1:ep);
+    return {name:r.name, start:s, end:Math.max(s,e)};
+  }).filter(Boolean);
+  if(spans.length<2) return null;
+  const latestStart=Math.max.apply(null,spans.map(s=>s.start));
+  const earliestEnd=Math.min.apply(null,spans.map(s=>s.end));
+  if(latestStart<=earliestEnd) return null;
+  return {late:(spans.find(s=>s.start===latestStart)||{}).name,
+          early:(spans.find(s=>s.end===earliestEnd)||{}).name};
+}
+
+// ════════════════════════════════════════════
 // COMPATIBILITY — what will fight with what
 // ════════════════════════════════════════════
 // Returns [{level:'error'|'warn'|'info', code, msg, fix}]. Every issue says
@@ -1426,15 +1525,31 @@ function worstLevel(issues){
   if(issues.some(i=>i.level==='warn'))  return 'warn';
   return 'info';
 }
+// A fermentation line is either one grape or a whole co-ferment. These read
+// the protocol, the loss chain and the yield rate off whichever it is.
+function lineProtocol(line){
+  if(!line) return null;
+  if(line.coWineId) return cofermentProtocol(wineById(line.coWineId),line.isRose);
+  return protocolForLine(line.grapeId,line.isRose);
+}
+function lineChain(line){
+  if(line&&line.coWineId) return cofermentChain(wineById(line.coWineId),line.isRose);
+  return chainFor(line.grapeId,line.isRose);
+}
+function lineLbsPerGal(line){
+  if(line&&line.coWineId) return cofermentMix(wineById(line.coWineId)).lbsPerGal;
+  return grapeRatio(grapeById(line.grapeId));
+}
 // Build the context for a specific fermentation line
 function protoCtxForLine(line){
   const y=line.yeastId?yeastById(line.yeastId):null;
   const g=grapeById(line.grapeId);
-  const brix=g&&g.targetBrix?+g.targetBrix:null;
+  const brix=line.coWineId?cofermentBrix(wineById(line.coWineId))
+                          :(g&&g.targetBrix?+g.targetBrix:null);
   return {yeast:y, traits:line.yeastId?yeastTraits(line.yeastId):null,
           potentialAlc:brix!=null?brix*0.55:null};
 }
-function checkLine(line){ return checkProtocol(protocolForLine(line.grapeId,line.isRose), protoCtxForLine(line)); }
+function checkLine(line){ return checkProtocol(lineProtocol(line), protoCtxForLine(line)); }
 
 // ════════════════════════════════════════════
 // PROTOCOL CHEMICALS — what to buy, from the plan
@@ -1443,8 +1558,8 @@ function checkLine(line){ return checkProtocol(protocolForLine(line.grapeId,line
 // scaled by that line's must volume.
 function lineVolumes(line,mustOverride){
   const must=(mustOverride>0?mustOverride:line.mustGal)||0;
-  const ch=chainFor(line.grapeId,line.isRose);
-  return {gal_must:must, gal_wine:must*ch.pToS, lbs:must*grapeRatio(grapeById(line.grapeId))};
+  const ch=lineChain(line);
+  return {gal_must:must, gal_wine:must*ch.pToS, lbs:must*lineLbsPerGal(line)};
 }
 function calcProtocolChemicals(opts){
   opts=opts||{};
@@ -1452,7 +1567,7 @@ function calcProtocolChemicals(opts){
   const includeOptional=!!opts.includeOptional;
   const rows=new Map();
   getTrackingLines().forEach(line=>{
-    const p=protocolForLine(line.grapeId,line.isRose); if(!p) return;
+    const p=lineProtocol(line); if(!p) return;
     const vol=lineVolumes(line,actualMust(trackingRec(line.key),line));
     (p.additions||[]).forEach(a=>{
       if(a.optional&&!includeOptional) return;
@@ -1491,7 +1606,7 @@ function calcProtocolBiologicals(){
     r.uses.push({batch:trackLineName(line),protocol:pName,stage:cat==='ML Culture'?'ml':'crush',qty:gal});
   };
   getTrackingLines().forEach(line=>{
-    const p=protocolForLine(line.grapeId,line.isRose); if(!p) return;
+    const p=lineProtocol(line); if(!p) return;
     const vol=lineVolumes(line,actualMust(trackingRec(line.key),line));
     if(p.ferment&&p.ferment.bioprotection)
       bump(p.ferment.bioprotection,'Bioprotection',vol.gal_must,line,p.name,'≈1 g/gal at crush');
@@ -1596,6 +1711,14 @@ function calcGrapeAllocations(){
   // PASS 1 — blends (need-based, back-calculated from the aging vessel)
   activeWines.filter(w=>w.wineType==='blend').forEach(wine => {
     const agingGal = parseFloat(wine.agingVolumeGal)||0; if(!agingGal) return;
+    if(isCoferment(wine)){
+      // One vessel, one chain: back-calculate the whole must, then split it
+      // across the varieties by their proportions.
+      cofermentNeed(wine).comps.forEach(r=>{
+        if(r.grapeId && r.lbs>0) push(r.grapeId, wine.id, wine.name, r.lbs);
+      });
+      return;
+    }
     const totRatio = wine.components.reduce((s,c)=>s+(parseFloat(c.ratio)||0),0)||1;
     wine.components.forEach(comp => {
       if(!comp.grapeId) return;
@@ -1636,7 +1759,9 @@ function calcGrapeAllocations(){
     const rem = remainingOf(grapeId);
     if(rem<=0.01) return;
     const firstBlendAlloc = entry.allocations.find(a=>{
-      const w = wineById(a.wineId); return w && w.wineType==='blend';
+      // a co-ferment takes exactly its recipe and no more — leftovers can't
+      // ride along as single-variety excess the way a separate ferment can
+      const w = wineById(a.wineId); return w && w.wineType==='blend' && !isCoferment(w);
     });
     if(firstBlendAlloc){ firstBlendAlloc.requested+=rem; firstBlendAlloc.allocated+=rem; }
   });
@@ -1748,7 +1873,59 @@ function calcBlendWine(wine){
     totalGrapesPounds:components.reduce((s,c)=>s+c.availLbs,0),
     totalMustGal:components.reduce((s,c)=>s+c.totalMustGal,0)};
 }
-function calcWine(w){ return w.wineType==='blend'?calcBlendWine(w):calcSingleWine(w); }
+// A co-ferment calculates like a single varietal with a compound grape bill:
+// one primary, one loss chain, one aging vessel. The fruit comes from several
+// varieties in fixed proportion, and the shortest supply caps the batch —
+// you cannot make up a missing variety with more of another and still have
+// the wine you planned.
+function calcCofermentWine(wine){
+  const agingGal=parseFloat(wine.agingVolumeGal)||0; if(!agingGal) return null;
+  const need=cofermentNeed(wine);
+  const allocMap=calcGrapeAllocations();
+  const bottleGal=agingGal*LOSS.aToB, bottles=Math.floor(bottleGal*BPGAL);
+  const secFrac=need.chain.pToS;
+  let capMust=Infinity, anyShare=false;
+  const components=need.comps.map(r=>{
+    const entry=r.grapeId?allocMap.get(r.grapeId):null;
+    const myAlloc=entry?entry.allocations.find(a=>a.wineId===wine.id):null;
+    const availLbs=myAlloc?myAlloc.allocated:0;
+    if(r.grapeId&&r.volShare>0&&r.lbpg>0){ anyShare=true; capMust=Math.min(capMust,availLbs/(r.volShare*r.lbpg)); }
+    const shortLbs=Math.max(0,r.lbs-availLbs);
+    return {grapeId:r.grapeId, name:r.name, ratio:r.ratio,
+      volShare:r.volShare, weightShare:r.weightShare, lbpg:r.lbpg,
+      availLbs, needLbs:r.lbs, totalLbs:(r.grape&&r.grape.pounds)||0,
+      shortLbs, sufficient:shortLbs<=0.01,
+      // blend-shaped fields so the existing renderers and the flowchart read it
+      totalMustGal:r.mustGal, redMustGal:r.mustGal, roseMustGal:0,
+      compSecGal:r.mustGal*secFrac,
+      blendPortionGal:r.mustGal*secFrac, blendFromComp:r.mustGal*secFrac,
+      excessGal:0, svFromComp:0, shortfall:0,
+      hasSecondary:cofermentNeedsSecondary(wine,false),
+      roseCalc:null, singleCalc:null, tankResults:null, useTankSplit:false};
+  });
+  const shortLbs=components.reduce((s,c)=>s+c.shortLbs,0);
+  const roseCalc=need.roseMustGal>0.05?calcCofermentRose(wine,need.roseMustGal):null;
+  return {isBlend:true, isCoferment:true, components,
+    mix:need.mix, lbsPerGal:need.lbsPerGal, startBrix:cofermentBrix(wine),
+    hasSecondary:cofermentNeedsSecondary(wine,false),
+    totalMustGal:need.totalMustGal, primaryGal:need.primaryGal, roseMustGal:need.roseMustGal,
+    secondaryGal:need.secondaryGal, blendSecNeeded:need.secondaryGal,
+    agingGal, bottleGal, blendBotGal:bottleGal, bottles, blendBottles:bottles,
+    grapsNeeded:need.totalLbs, shortLbs, sufficient:shortLbs<=0.01,
+    maxMustGal:anyShare&&isFinite(capMust)?capMust:0,
+    totalGrapesPounds:components.reduce((s,c)=>s+c.availLbs,0),
+    roseCalc, harvestClash:cofermentHarvestClash(wine)};
+}
+function calcCofermentRose(wine,roseMustGal){
+  const ch=cofermentChain(wine,true);
+  const eq=byId(wine.roseAgingEquipmentId);
+  const secGal=roseMustGal*ch.pToS;
+  const ageGal=(wine.roseAgingVolumeGal?parseFloat(wine.roseAgingVolumeGal):0)||(eq?eq.volumeGal:secGal*ch.sToA);
+  const botGal=ageGal*LOSS.aToB;
+  return {primaryGal:roseMustGal,secondaryGal:secGal,agingGal:ageGal,bottleGal:botGal,
+    bottles:Math.floor(botGal*BPGAL)};
+}
+function calcWine(w){ return isCoferment(w)?calcCofermentWine(w):(w.wineType==='blend'?calcBlendWine(w):calcSingleWine(w)); }
 
 function calcSVConsolidation(){
   // Aggregate SV excess across all blend wines, grouped by grapeId::yeastId
@@ -2326,7 +2503,7 @@ function renderWines(){
       <span class="dot dot-${w.color}"></span>
       <span style="flex:1">${w.name}</span>
       ${on?'':'<span style="font-size:9px;background:#eee;border:1px solid #ccc;border-radius:3px;padding:1px 4px;color:#888">OFF</span>'}
-      <span class="badge badge-${w.color}" style="font-size:10px">${w.wineType}</span>
+      <span class="badge badge-${w.color}" style="font-size:10px">${isCoferment(w)?'co-ferment':w.wineType}</span>
       <span title="${on?'Turn off (exclude from plan)':'Turn on'}" style="cursor:pointer;font-size:12px;padding:0 2px;color:${on?'#1e8449':'#bbb'}" onclick="event.stopPropagation();toggleWineActive('${w.id}')">⏻</span>
     </div>`}).join('');
   const detail=S.ui.wineId?renderWineDetail(wineById(S.ui.wineId))
@@ -2395,7 +2572,7 @@ function renderWineDetail(w){
       <div><div class="pt">${w.name}${w.active===false?' <span style="font-size:10px;background:#eee;border:1px solid #ccc;border-radius:3px;padding:1px 5px;color:#888;vertical-align:middle">INACTIVE</span>':''}</div>
         <div class="flex gap8 mt4">
           <span class="badge badge-${w.color}">${w.color.toUpperCase()}</span>
-          <span class="badge badge-white">${w.wineType==='blend'?'Blend':'Single Varietal'}</span>
+          <span class="badge badge-white">${isCoferment(w)?'Co-Ferment':w.wineType==='blend'?'Blend':'Single Varietal'}</span>
           <label class="tog-wrap" title="Inactive wines are kept but excluded from allocations and the flowchart">
             <input class="tog" type="checkbox" ${w.active!==false?'checked':''} onchange="toggleWineActive('${w.id}')">
             <span class="lbl" style="margin:0">Active</span></label>
@@ -2415,9 +2592,18 @@ function renderWineDetail(w){
         <select class="fc" onchange="updateWine('${w.id}','wineType',this.value)">
           <option value="single" ${w.wineType==='single'?'selected':''}>Single Varietal</option>
           <option value="blend" ${w.wineType==='blend'?'selected':''}>Blend</option></select></div>
+      ${w.wineType==='blend'?`<div class="fg"><label class="lbl">How It's Made</label>
+        <select class="fc" onchange="setBlendMode('${w.id}',this.value)">
+          <option value="separate" ${!isCoferment(w)?'selected':''}>Blend finished wines</option>
+          <option value="coferment" ${isCoferment(w)?'selected':''}>Co-ferment — one vessel</option></select>
+        <div class="txt-s txt-m mt4" style="font-size:11px">${isCoferment(w)
+          ?'All varieties crushed together, one yeast, one fermentation.'
+          :'Each variety ferments alone; the wines meet after secondary.'}</div></div>`:''}
     </div>
-    <div class="sdiv">🛢 Aging Vessel${w.wineType==='blend'?' — Blend Target':' — Production Target'}</div>
-    ${w.wineType==='blend'
+    <div class="sdiv">🛢 Aging Vessel${w.wineType==='blend'?(isCoferment(w)?' — Co-Ferment Target':' — Blend Target'):' — Production Target'}</div>
+    ${isCoferment(w)
+      ?`<div class="info-note mb8">💡 <b>One fermentation, several grapes.</b> The aging vessel sets the target; the fruit bill is worked back from it and divided by the proportions below. Nothing is held apart, so there is no single-variety excess to place and no assembly step.</div>`
+      :w.wineType==='blend'
       ?`<div class="info-note mb8">💡 <b>Blends have grape priority:</b> each blend claims only the lbs its portion needs (so one grape can feed several blends), then dedicated single varietals, and any leftover grapes automatically become single-variety wine, united by yeast.</div>`
       :`<div class="info-note mb8">💡 Aging vessel is the production target. Back-calculation shows how many grapes you need.</div>`}
     <div class="g2">
@@ -2436,7 +2622,7 @@ function renderWineDetail(w){
         <option value="american" ${w.oakType==='american'?'selected':''}>American Oak</option>
         <option value="hungarian" ${w.oakType==='hungarian'?'selected':''}>Hungarian Oak</option>
       </select></div>`:''}
-    ${w.wineType==='single'?renderSingleSection(w,calc):renderBlendSection(w,calc)}
+    ${w.wineType==='single'?renderSingleSection(w,calc):isCoferment(w)?renderCofermentSection(w,calc):renderBlendSection(w,calc)}
     ${renderWineProtocolPanel(w)}
     ${calc?renderCalcSummary(w,calc):`<div class="info-note mt8">⚠ Set aging vessel volume to see calculations.</div>`}
   </div>`;
@@ -2639,6 +2825,114 @@ function renderBlendSection(w,calc){
     ${cards||'<div class="txt-s txt-m mb8">No varieties added yet.</div>'}`;
 }
 
+// Everything a co-ferment needs in one place: what goes in the vessel, in
+// what proportion, on what yeast — and whether a secondary exists.
+function renderCofermentSection(w,calc){
+  const basis=(w.ratioBasis==='weight')?'weight':'volume';
+  const totRatio=(w.components||[]).reduce((s,c)=>s+(c.grapeId?(parseFloat(c.ratio)||0):0),0);
+  const ratioOk=Math.abs(totRatio-100)<1;
+  const sec=cofermentNeedsSecondary(w,false);
+  const proto=cofermentProtocol(w,false);
+  const clash=calc?calc.harvestClash:cofermentHarvestClash(w);
+  const cards=(w.components||[]).map((comp,i)=>{
+    const cc=calc?calc.components[i]:null;
+    const g=grapeById(comp.grapeId);
+    return `<div class="comp-card">
+      <div class="comp-card-hdr">
+        <div>
+          <div class="comp-card-eyebrow">Variety ${i+1}</div>
+          <span class="comp-card-title">${g?esc(g.name):'— select grape —'}${cc&&cc.ratio>0
+            ?`<span class="comp-card-gal">${cc.ratio.toFixed(0)}% ${basis==='weight'?'by weight':'by volume'} = ${fmtGal(cc.totalMustGal)} of must</span>`:''}${cc&&cc.shortLbs>0.01
+            ?`<span style="color:#c0392b;font-size:11px;margin-left:8px">⚠ short ${fmtAmt(g,cc.shortLbs)}</span>`:''}</span>
+        </div>
+        <button class="btn btn-d btn-xs" onclick="removeComp('${w.id}',${i})">Remove</button>
+      </div>
+      <div class="g3">
+        <div class="fg"><label class="lbl">Grape Variety</label>${wineGrapeSelect(w.id,i,comp.grapeId)}</div>
+        <div class="fg"><label class="lbl">Proportion %</label>
+          <input class="fc" type="number" value="${comp.ratio}" min="0" max="100" step="0.5"
+            onchange="updateComp('${w.id}',${i},'ratio',+this.value)">
+          ${cc&&cc.ratio>0?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${basis==='weight'
+            ?`${(cc.volShare*100).toFixed(0)}% of the must by volume`
+            :`${(cc.weightShare*100).toFixed(0)}% of the fruit by weight`}</div>`:''}</div>
+        <div class="fg"><label class="lbl">${grapeUnit(g)==='gal'?'Juice':'Fruit'} for this share</label>
+          <div class="fc fc-ro">${cc?`${fmtAmt(g,cc.needLbs)} needed · ${fmtAmt(g,cc.availLbs)} available
+            <span class="${cc.sufficient?'ok':'warn'}">${cc.sufficient?'✔':'⚠'}</span>`:'—'}</div>
+          ${cc&&g?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${cc.lbpg.toFixed(2)} ${grapeUnit(g)==='gal'?'gal/gal':'lbs/gal'}</div>`:''}</div>
+      </div>
+      ${renderQuickGrapeForm(w.id,i,w.color)}
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="sdiv">🍇 Co-Ferment Composition</div>
+    <div class="info-note mb8">Every variety goes into the same primary and ferments as one wine. Proportions are fixed at the crush pad, so the variety in shortest supply caps the batch.</div>
+    ${clash?`<div class="info-note mb8" style="border-color:#e0b050;background:#fdf6e3">⚠ <b>Harvest windows don't overlap:</b> ${esc(clash.early)} is done before ${esc(clash.late)} starts. Co-fermenting these means picking one off its own schedule — the usual move is to pick the earlier variety late or the later one early.</div>`:''}
+    <div class="flex fai gap8 mb8" style="flex-wrap:wrap">
+      <span class="ratio-total ${ratioOk?'rt-ok':'rt-bad'}">Proportions: ${totRatio.toFixed(0)}%${ratioOk?' ✔':' — must equal 100%'}</span>
+      <div class="flex fai gap4">
+        <span class="lbl" style="margin:0">Read as</span>
+        <select class="fc" style="width:auto;font-size:12px" onchange="setRatioBasis('${w.id}',this.value)">
+          <option value="volume" ${basis==='volume'?'selected':''}>% of the must (volume)</option>
+          <option value="weight" ${basis==='weight'?'selected':''}>% of the fruit (weight)</option>
+        </select>
+      </div>
+      <button class="btn btn-p btn-sm" onclick="addComp('${w.id}')">+ Add Variety</button>
+    </div>
+    <div class="txt-s txt-m mb8" style="font-size:11px">${basis==='weight'
+      ?'Weights off the scale. Varieties with different yields land at different shares of the finished wine — the volume figure is shown under each.'
+      :'Shares of what ends up in the fermenter. This is the wine you taste; the fruit weight each share needs is worked back through that variety\'s yield.'}</div>
+    ${cards||'<div class="txt-s txt-m mb8">No varieties yet — click Add Variety.</div>'}
+
+    <div class="sdiv">🪣 Fermentation Vessels</div>
+    <div class="g3">
+      <div class="fg"><label class="lbl">Primary Fermenter</label>
+        <select class="fc" onchange="updateWine('${w.id}','primaryEquipmentId',this.value)">${eqOpts(w.primaryEquipmentId,'— Pick Vessel —','primary')}</select>
+        ${calc?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${fmtGal(calc.totalMustGal)} of must${calc.startBrix!=null?` · ~${calc.startBrix.toFixed(1)}°Bx blended`:''}</div>`:''}</div>
+      ${sec
+        ?`<div class="fg"><label class="lbl">Secondary Fermenter</label>
+            <select class="fc" onchange="updateWine('${w.id}','secondaryEquipmentId',this.value)">${eqOpts(w.secondaryEquipmentId,'— Pick Vessel —','secondary')}</select>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">${calc?fmtGal(calc.secondaryGal):''} — sequential ML needs its own vessel</div></div>`
+        :`<div class="fg"><label class="lbl">Secondary Fermenter</label>
+            <div class="fc fc-ro" title="${esc(needsSecondary(proto).reason)}">⏭ Not needed — press straight to aging</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Set by the protocol below</div></div>`}
+      <div class="fg"><label class="lbl">Into the aging vessel</label>
+        <div class="fc fc-ro">${calc?fmtGal(calc.agingGal):'—'}${calc?` · ~${calc.bottles} btl`:''}</div></div>
+    </div>
+
+    <div class="sdiv">🧪 Yeast</div>
+    <div class="info-note mb8" style="font-size:11px">One inoculation for the whole vessel — a co-ferment can't carry a strain per variety.</div>
+    <div class="fg"><label class="lbl">Yeast</label>
+      <select class="fc" onchange="updateWine('${w.id}','yeastId',this.value)">${yeastOpts(w.yeastId,'')}</select></div>
+    ${renderYeastInfo(w.yeastId)}
+    ${w.color==='red'?renderCofermentRose(w,calc):''}`;
+}
+
+// The bleed comes off the assembled must, so its yield lives on the wine's own
+// calc rather than on any one variety's.
+function renderCofermentRose(w,calc){
+  const names=((calc&&calc.components)||[]).filter(c=>c.grapeId&&c.volShare>0).map(c=>c.name).join(' + ');
+  return `<div class="sdiv">🌹 Rosé via Saignée</div>
+    <div class="rose-section">
+      <div class="flex fai gap8 mb8">
+        <input class="tog" type="checkbox" ${w.hasRose?'checked':''} onchange="updateWine('${w.id}','hasRose',this.checked)">
+        <span style="color:var(--rose-dk);font-weight:bold;font-size:13px">Enable Saignée Rosé</span>
+      </div>
+      ${w.hasRose?`
+        <div class="txt-s txt-m mb8" style="font-size:11px">Bled off the co-ferment before the cap sets, so the rosé carries the same ${esc(names||'blend')} mix as the red.</div>
+        <div class="g2">
+          <div class="fg"><label class="lbl">Bleed-off %</label>
+            <div class="flex fai gap8">
+              <input type="number" class="fc" min="1" max="50" step="0.5" value="${w.saigneePercent||10}" style="width:90px"
+                onchange="updateWine('${w.id}','saigneePercent',Math.min(50,Math.max(1,+this.value)))">
+              <span style="font-weight:bold;color:var(--rose-dk);font-size:13px">%</span></div></div>
+          <div class="fg"><label class="lbl">Rosé Aging Vessel</label>
+            <select class="fc" onchange="pickRoseEq('${w.id}',null,this.value)">${eqOpts(w.roseAgingEquipmentId,'— Pick Vessel —','aging')}</select></div>
+        </div>
+        ${renderRoseYeastBlock(w.roseYeastId,`updateWine('${w.id}','roseYeastId',this.value)`,'')}
+        ${calc&&calc.roseCalc?renderRoseCalcBox(calc.roseCalc):''}`:''}</div>`;
+}
+
 function renderCompCalc(cc,comp,wine){
   const svEq=byId(comp.singleAgingEquipmentId);
   const g=grapeById(comp.grapeId);
@@ -2710,6 +3004,17 @@ function renderRoseCalcBox(rc){
 // Conflicts for every fermentation line this wine touches
 function wineProtocolIssues(w){
   const out=[];
+  if(isCoferment(w)){
+    const first=(w.components||[]).find(c=>c.grapeId);
+    const mk=(isRose,yeastId)=>{
+      const iss=checkLine({coWineId:w.id,grapeId:first?first.grapeId:null,yeastId,isRose});
+      if(iss.length) out.push({name:w.name+(isRose?' rosé':' — co-ferment'),
+        proto:cofermentProtocol(w,isRose),issues:iss});
+    };
+    mk(false,w.yeastId);
+    if(w.hasRose&&w.saigneePercent>0&&w.color==='red') mk(true,w.roseYeastId);
+    return out;
+  }
   const comps=w.wineType==='single'?[{grapeId:w.grapeId,yeastId:w.yeastId,hasRose:w.hasRose,saigneePercent:w.saigneePercent,roseYeastId:w.roseYeastId}]:w.components;
   comps.forEach(c=>{
     if(!c.grapeId) return;
@@ -2726,6 +3031,7 @@ function wineProtocolIssues(w){
   return out;
 }
 function renderWineProtocolPanel(w){
+  if(isCoferment(w)) return renderCofermentProtocolPanel(w);
   const comps=w.wineType==='single'?[{grapeId:w.grapeId}]:w.components;
   const grapeIds=[...new Set(comps.map(c=>c.grapeId).filter(Boolean))];
   if(!grapeIds.length) return '';
@@ -2746,7 +3052,54 @@ function renderWineProtocolPanel(w){
       ${issueListHTML(x.issues,true)}</div>`).join('')
       :`<div class="info-note" style="font-size:11px">${issueDot('ok')} No protocol conflicts on this wine.</div>`}`;
 }
+// One protocol for the whole vessel — and its MLF timing is what decides
+// whether a secondary exists at all.
+function renderCofermentProtocolPanel(w){
+  const p=cofermentProtocol(w,false), sec=needsSecondary(p);
+  const groups=wineProtocolIssues(w);
+  const showRose=w.color==='red'&&w.hasRose&&w.saigneePercent>0;
+  return `<div class="sdiv">📜 Protocol</div>
+    <div class="info-note mb8" style="font-size:11px">🫙 The malolactic setting drives the vessel count: <b>co-inoculated</b> ML finishes alongside the primary, so the wine presses straight to aging; <b>sequential</b> ML runs after the primary and needs a vessel of its own.</div>
+    <div class="g2 mb8">
+      <div class="fg"><label class="lbl">Co-ferment protocol</label>
+        <select class="fc" onchange="setCofermentProtocol('${w.id}',this.value,false)">${protocolOpts(cofermentProtocolId(w,false),w.color)}</select>
+        ${p?`<div class="txt-s txt-m mt4" style="font-size:11px">ML: ${esc(((p.mlf&&p.mlf.mode)||'none')==='simultaneous'?'co-inoculated':((p.mlf&&p.mlf.mode)||'none')==='consecutive'?'sequential':'none planned')}${p.mlf&&p.mlf.culture&&p.mlf.culture!=='native'?' · '+esc(p.mlf.culture):''}</div>`:''}</div>
+      <div class="fg"><label class="lbl">After primary</label>
+        <div class="fc fc-ro">${sec.required?'⚗️ Secondary vessel':'⏭ Straight to aging'}</div>
+        <div class="txt-s txt-m mt4" style="font-size:11px">${esc(sec.reason)}</div></div>
+    </div>
+    ${showRose?`<div class="fg mb8"><label class="lbl">🌹 Rosé protocol (saignée off this co-ferment)</label>
+      <select class="fc" onchange="setCofermentProtocol('${w.id}',this.value,true)">${protocolOpts(cofermentProtocolId(w,true),'rose')}</select></div>`:''}
+    ${p?`<button class="btn btn-s btn-sm mb8" onclick="openProtocol('${p.id}')">Open protocol →</button>`:''}
+    ${groups.length?groups.map(x=>`<div style="margin-bottom:6px">
+      <div class="txt-b" style="font-size:11px">${esc(x.name)} · ${esc(x.proto?x.proto.name:'')}</div>
+      ${issueListHTML(x.issues,true)}</div>`).join('')
+      :`<div class="info-note" style="font-size:11px">${issueDot('ok')} No protocol conflicts on this co-ferment.</div>`}`;
+}
 function renderCalcSummary(w,calc){
+  if(calc&&calc.isCoferment){
+    const used=calc.components.filter(c=>c.grapeId&&c.volShare>0);
+    const rows=used.map(cc=>{
+      const g=grapeById(cc.grapeId);
+      return `<div class="calc-row" style="padding-left:12px">
+        <span>↳ ${esc(cc.name)} ${cc.ratio.toFixed(0)}% — ${fmtAmt(g,cc.needLbs)} → ${fmtGal(cc.totalMustGal)}</span>
+        <span>${cc.sufficient?'<span class="ok">✔</span>':`<span class="warn">⚠ short ${fmtAmt(g,cc.shortLbs)}</span>`}</span></div>`;
+    }).join('');
+    const capBottles=Math.floor(calc.maxMustGal*LOSS.pToS*(calc.hasSecondary?LOSS.sToA:1)*LOSS.aToB*BPGAL);
+    return `<div class="calc-box"><div class="calc-title">📊 Co-Ferment Summary</div>
+      <div class="info-note mb8" style="font-size:11px">Losses: primary→secondary 15%${calc.hasSecondary?' · secondary→aging 5%':' · no secondary racking'} · aging→bottle 5%</div>
+      <div class="calc-row"><span><b>${esc(w.name)}</b> — ${used.length} ${used.length===1?'variety':'varieties'}, one fermentation</span><span class="cv">~${calc.bottles} bottles</span></div>
+      ${rows}
+      <div class="calc-row" style="border-top:1px solid var(--border);padding-top:4px"><span><b>Total must</b></span><span class="cv">${fmtGal(calc.totalMustGal)}${calc.startBrix!=null?` · ~${calc.startBrix.toFixed(1)}°Bx`:''}</span></div>
+      ${calc.roseMustGal>0.05?`<div class="calc-row" style="color:var(--rose-dk)"><span>↳ Saignée (rosé must)</span><span class="cv">${fmtGal(calc.roseMustGal)}</span></div>`:''}
+      <div class="calc-row"><span>${calc.hasSecondary?'Secondary' : 'After press — no secondary'}</span><span class="cv">${fmtGal(calc.secondaryGal)}</span></div>
+      <div class="calc-row"><span>Aging vessel</span><span class="cv">${fmtGal(calc.agingGal)}</span></div>
+      <div class="calc-row"><span>Blended yield rate</span><span class="cv">${calc.lbsPerGal?calc.lbsPerGal.toFixed(2)+' lbs/gal':'—'}</span></div>
+      <div class="calc-row"><span><b>🍾 Bottles</b></span><span class="cv" style="font-size:16px">~${calc.bottles}</span></div>
+      ${calc.roseCalc?`<div class="calc-row" style="padding-left:12px;color:var(--rose-dk)"><span>+ Rosé: ~${calc.roseCalc.bottles} bottles (${fmtGal(calc.roseCalc.primaryGal)} saignée)</span><span></span></div>`:''}
+      ${!calc.sufficient?`<div class="info-note mt8" style="font-size:11px">⚠ <b>The fruit runs out at these proportions.</b> Holding the recipe, the most this batch can be is ${fmtGal(calc.maxMustGal)} of must — about ${capBottles} bottles. Shrink the aging vessel, buy more of the short variety, or change the proportions.</div>`:''}
+    </div>`;
+  }
   if(w.wineType==='single'){
     const grape=grapeById(w.grapeId);
     const allocMap=calcGrapeAllocations();
@@ -2858,6 +3211,7 @@ function stageVolumes(mustGal,hasSec){
 function keyGrape(key){ const p=String(key||'').split('::'); return {grapeId:p[0],isRose:p[1]==='rose'}; }
 function keyProtocol(key){
   if(!key||key.startsWith('blend::')) return null;
+  if(key.startsWith('co::')){ const p=key.split('::'); return cofermentProtocol(wineById(p[1]),p[2]==='rose'); }
   const {grapeId,isRose}=keyGrape(key);
   return protocolForLine(grapeId,isRose);
 }
@@ -2866,6 +3220,7 @@ function keyProtocol(key){
 function recNeedsSecondary(rec,key){
   if(!key||key.startsWith('blend::')) return true;
   if(rec&&rec.mlManual) return !!(rec.ml.enabled&&rec.ml.timing==='post');
+  if(key.startsWith('co::')){ const p=key.split('::'); return cofermentNeedsSecondary(wineById(p[1]),p[2]==='rose'); }
   const {grapeId,isRose}=keyGrape(key);
   return grapeNeedsSecondary(grapeId,isRose);
 }
@@ -2879,6 +3234,23 @@ function getTrackingLines(){
   };
   S.wines.filter(w=>w.active!==false).forEach(wine=>{
     const calc=calcWine(wine); if(!calc) return;
+    if(isCoferment(wine)){
+      // The whole co-ferment is one batch: one vessel, one yeast, one log.
+      const gids=calc.components.filter(c=>c.grapeId&&c.volShare>0&&isGrapeActive(c.grapeId)).map(c=>c.grapeId);
+      if(!gids.length) return;
+      const base={coWineId:wine.id, grapeId:gids[0], grapeIds:gids, isRose:false};
+      const key='co::'+wine.id;
+      if(!map.has(key)) map.set(key,Object.assign({key,yeastId:wine.yeastId,mustGal:0,wines:new Set(),
+        label:cofermentLineLabel(wine,calc)},base));
+      const l=map.get(key); l.mustGal+=calc.totalMustGal||0; l.wines.add(wine.name);
+      if(calc.roseCalc&&calc.roseMustGal>0.05){
+        const rkey=key+'::rose';
+        if(!map.has(rkey)) map.set(rkey,Object.assign({},base,{key:rkey,isRose:true,
+          yeastId:wine.roseYeastId,mustGal:0,wines:new Set(),label:'🌹 '+wine.name+' Rosé'}));
+        const rl=map.get(rkey); rl.mustGal+=calc.roseMustGal; rl.wines.add(wine.name);
+      }
+      return;
+    }
     const entries=wine.wineType==='single'
       ?[{comp:wine,cc:calc.components[0],tankRes:calc.tankResults}]
       :wine.components.map((c,i)=>({comp:c,cc:calc.components[i],tankRes:calc.components[i]?.tankResults}));
@@ -2928,7 +3300,12 @@ function trackStages(rec,key){
   st.push('aging','bottled');
   return st;
 }
+function cofermentLineLabel(wine,calc){
+  const names=((calc&&calc.components)||[]).filter(c=>c.grapeId&&c.volShare>0).map(c=>c.name);
+  return (names.length?names.join(' + '):wine.name)+' (co-ferment)';
+}
 function trackLineName(line){
+  if(line.label) return line.label;
   const g=grapeById(line.grapeId);
   return (line.isRose?'🌹 ':'')+(g?.name||'?')+(line.isRose?' Rosé':'');
 }
@@ -3028,7 +3405,7 @@ function renderTrackingTab(){
       </div>
       <div class="txt-s txt-m" style="margin:4px 0 2px">${yeast?yeast.name+' · ':''}${fmtGal(actualMust(rec,line))} must${actualMust(rec,line)!==line.mustGal?' <span style="color:var(--oak)">✓</span>':''}${rec.started&&rec.stage?' → '+fmtGal(stageVolumes(actualMust(rec,line),recNeedsSecondary(rec,line.key))[rec.stage])+' now':''}</div>
       <div class="txt-s txt-m" style="font-size:11px">${[...line.wines].join(', ')}</div>
-      ${(()=>{ const p=protocolForLine(line.grapeId,line.isRose); if(!p) return '';
+      ${(()=>{ const p=lineProtocol(line); if(!p) return '';
         const w=worstLevel(checkLine(line));
         return `<div class="txt-s txt-m" style="font-size:11px;margin-top:3px">${issueDot(w)} ${esc(p.name)}</div>`; })()}
       ${rec.started&&lastR?`<div class="txt-s" style="margin-top:6px;font-size:11px">Last: ${lastR.date}${lastR.brix!=null?' · '+lastR.brix+'°Bx':''}${lastR.ph!=null?' · pH '+lastR.ph:''}</div>`:''}
@@ -3306,7 +3683,7 @@ function renderTrackingDetail(line){
   const rec=trackingRec(line.key);
   const stages=trackStages(rec,line.key);
   if(rec.started&&!stages.includes(rec.stage)) rec.stage=stages[Math.min(1,stages.length-1)];
-  const proto=protocolForLine(line.grapeId,line.isRose);
+  const proto=lineProtocol(line);
   const protoIssues=checkLine(line);
   const hasSec=recNeedsSecondary(rec,line.key);
   const mustGal=actualMust(rec,line);            // measured if entered, planned if not
@@ -3352,10 +3729,15 @@ function renderTrackingDetail(line){
 
     <div class="sdiv">📜 Protocol</div>
     <div class="flex fai gap12 mb8" style="flex-wrap:wrap">
-      <select class="fc" style="width:auto;min-width:230px;font-size:12px" onchange="${line.isRose?`setGrapeRoseProtocol('${line.grapeId}',this.value)`:`setGrapeProtocol('${line.grapeId}',this.value)`}">
-        ${protocolOpts(line.isRose?roseProtocolIdFor(line.grapeId):grapeProtocolId(grapeById(line.grapeId)), line.isRose?'rose':grapeById(line.grapeId)?.type)}</select>
+      ${line.coWineId
+        ?`<select class="fc" style="width:auto;min-width:230px;font-size:12px" onchange="setCofermentProtocol('${line.coWineId}',this.value,${line.isRose?'true':'false'})">
+            ${protocolOpts(cofermentProtocolId(wineById(line.coWineId),line.isRose), line.isRose?'rose':wineById(line.coWineId)?.color)}</select>`
+        :`<select class="fc" style="width:auto;min-width:230px;font-size:12px" onchange="${line.isRose?`setGrapeRoseProtocol('${line.grapeId}',this.value)`:`setGrapeProtocol('${line.grapeId}',this.value)`}">
+            ${protocolOpts(line.isRose?roseProtocolIdFor(line.grapeId):grapeProtocolId(grapeById(line.grapeId)), line.isRose?'rose':grapeById(line.grapeId)?.type)}</select>`}
       ${proto?`<button class="btn btn-s btn-sm" onclick="openProtocol('${proto.id}')">Open protocol →</button>`:''}
-      <span class="txt-s txt-m" style="font-size:11px">${line.isRose?'Applies to this rosé bleed':`Applies to every ${esc(grapeById(line.grapeId)?.name||'')} batch`}</span>
+      <span class="txt-s txt-m" style="font-size:11px">${line.coWineId
+        ?(line.isRose?'Applies to this rosé bleed':'Applies to the whole co-ferment — every variety in the vessel')
+        :(line.isRose?'Applies to this rosé bleed':`Applies to every ${esc(grapeById(line.grapeId)?.name||'')} batch`)}</span>
     </div>
     ${proto?`<div class="info-note mb8" style="font-size:11px">⚗️ <b>Secondary:</b> ${hasSec?'in the plan':'skipped'} — ${esc(needsSecondary(proto).reason)}</div>`:''}
     ${protoWarnStrip(protoIssues)}
@@ -3512,8 +3894,19 @@ function lineDistribution(line){
   const res={dests:[], totalSec:0};
   const add=(name,gal,kind)=>{ if(gal<=0.05) return; res.dests.push({name,gal,kind}); };
   const matchYeast=(yId)=>(yId||'none')===(line.yeastId||'none');
+  if(line.coWineId){
+    // A co-ferment doesn't split — it is one wine from the fermenter onward.
+    const wine=wineById(line.coWineId);
+    const calc=wine?calcWine(wine):null;
+    if(calc){
+      if(line.isRose&&calc.roseCalc){ res.totalSec=calc.roseCalc.secondaryGal||0; add('🌹 '+wine.name+' rosé',res.totalSec,'rose'); }
+      else { res.totalSec=calc.secondaryGal||0; add('→ '+wine.name,res.totalSec,'blend'); }
+    }
+    return res;
+  }
   S.wines.filter(w=>w.active!==false).forEach(wine=>{
     const calc=calcWine(wine); if(!calc) return;
+    if(isCoferment(wine)) return;   // handled above; never feeds a per-grape line
     if(wine.wineType==='single'){
       const cc=calc.components[0]; if(!cc||wine.grapeId!==line.grapeId||!isGrapeActive(wine.grapeId)) return;
       if(line.isRose){
@@ -3557,7 +3950,8 @@ function lineDistribution(line){
 // BLEND LAB — assembly start + bench-trial proportions
 // ════════════════════════════════════════════
 function getBlendTargets(){
-  return S.wines.filter(w=>w.wineType==='blend'&&w.active!==false).map(w=>{
+  // Co-ferments never get assembled — there is nothing to bench-trial.
+  return S.wines.filter(w=>w.wineType==='blend'&&w.active!==false&&!isCoferment(w)).map(w=>{
     const calc=calcWine(w);
     const comps=(calc?.components||[]).map((cc,i)=>({
       idx:i, grapeId:w.components[i].grapeId, name:cc.name,
@@ -3654,6 +4048,8 @@ function getChemicalTotals(){
 }
 function trackKeyLabel(key){
   if(key.startsWith('blend::')){ const w=wineById(key.slice(7)); return w?w.name:'blend'; }
+  if(key.startsWith('co::')){ const p=key.split('::'); const w=wineById(p[1]);
+    return (w?w.name:'co-ferment')+(p[2]==='rose'?' rosé':' (co-ferment)'); }
   const [gid,rest]=key.split('::'); const g=grapeById(gid);
   return (g?g.name:'?')+(rest&&rest.startsWith('rose')?' rosé':'');
 }
@@ -3758,6 +4154,7 @@ function renderFlowchartTab(){
         <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#FAF7F0;border:1.5px dashed #C7BBA4"></div>No secondary</div>
         <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#5D8A5E"></div>Oak Aging</div>
         <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#2C7BB6"></div>Inert Aging</div>
+        <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#8E6BA8"></div>Co-ferment feed</div>
         <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#7B6A5A"></div>Single Variety</div>
         <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#D4798A"></div>Rosé</div>
         <div class="fc-leg-item"><div class="fc-leg-swatch" style="background:#2C3E50"></div>Bottles</div>
@@ -3838,6 +4235,22 @@ function buildSVG(){
   wines.forEach(wine=>{
     const calc=calcWine(wine);
     if(!calc) return;
+    if(isCoferment(wine)){
+      // One column for the vessel; every contributing variety points into it.
+      const parts=calc.components.filter(c=>c.grapeId&&c.volShare>0&&isGrapeActive(c.grapeId));
+      if(!parts.length) return;
+      const key='co::'+wine.id;
+      if(!fermLines.has(key)) fermLines.set(key,{key,coWineId:wine.id,
+        grapeId:parts[0].grapeId, grapeIds:parts.map(p=>p.grapeId), coParts:parts,
+        yeastId:wine.yeastId, usages:[], roseUsages:[]});
+      const line=fermLines.get(key);
+      line.usages.push({wineId:wine.id,compIdx:null,tankIdx:null,
+        mustGal:calc.totalMustGal, secGal:calc.secondaryGal,
+        dest:{kind:'blend',wineId:wine.id,blendGal:calc.secondaryGal,svGal:0,shortfall:calc.sufficient?0:1}});
+      if(calc.roseCalc&&calc.roseMustGal>0.05)
+        line.roseUsages.push({roseMustGal:calc.roseMustGal,roseAgingEquipmentId:wine.roseAgingEquipmentId});
+      return;
+    }
     if(wine.wineType==='single'){
       const cc=calc.components[0]; if(!cc||!wine.grapeId||!isGrapeActive(wine.grapeId)) return;
       if(wine.useTankSplit&&wine.tanks?.length>1&&calc.tankResults){
@@ -3893,7 +4306,9 @@ function buildSVG(){
       const first=line.roseUsages[0];
       line.roseAgingEquipmentId=first.roseAgingEquipmentId;
       const rAgeEq=byId(first.roseAgingEquipmentId);
-      line.roseCalc = totalRoseMust>0.05 ? calcRoseChain(totalRoseMust, rAgeEq?.volumeGal, line.grapeId) : null;
+      line.roseCalc = totalRoseMust<=0.05 ? null
+        : line.coWineId ? calcCofermentRose(wineById(line.coWineId), totalRoseMust)
+        : calcRoseChain(totalRoseMust, rAgeEq?.volumeGal, line.grapeId);
     }
   });
 
@@ -3911,11 +4326,23 @@ function buildSVG(){
     if(!grapeLines.has(line.grapeId)){ grapeLines.set(line.grapeId,[]); grapeOrder.push(line.grapeId); }
     grapeLines.get(line.grapeId).push(line);
   });
+  // a variety that only ever goes into a co-ferment has no column of its own,
+  // but it still gets a node — one grape, one node, as everywhere else
+  fermLines.forEach(line=>{
+    (line.grapeIds||[]).forEach(gid=>{
+      if(!grapeLines.has(gid)){ grapeLines.set(gid,[]); grapeOrder.push(gid); }
+    });
+  });
   let curX=PAD_LEFT;
   const grapeNodeInfo=[];
   grapeOrder.forEach(grapeId=>{
-    const linesForGrape=grapeLines.get(grapeId);
+    const linesForGrape=grapeLines.get(grapeId)||[];
     const colInfos=[];
+    if(!linesForGrape.length){
+      const cx=curX+CW/2; curX+=CW+GRAPE_GAP;
+      grapeNodeInfo.push({grapeId,nodeCx:cx,cols:[],feedsOnly:true});
+      return;
+    }
     linesForGrape.forEach(line=>{
       const hasRose=!!line.roseCalc;
       const cx=curX+CW/2;
@@ -4009,11 +4436,12 @@ function buildSVG(){
     <marker id="arr-sv" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#7B6A5A"/></marker>
     <marker id="arr-red" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8B0000"/></marker>
     <marker id="arr-w" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#C9A84C"/></marker>
+    <marker id="arr-co" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8E6BA8"/></marker>
   </defs>`);
   els.push(`<rect width="${totalW}" height="${totalH}" fill="#FAF7F0"/>`);
   els.push(`<rect x="0" y="${PAD_TOP}" width="${PAD_LEFT-5}" height="${totalH-PAD_TOP-16}" fill="rgba(245,236,215,0.6)"/>`);
 
-  function mkFor(color){ return color==='#D4798A'?'arr-r':color==='#2C7BB6'?'arr-b':color==='#7B6A5A'?'arr-sv':color==='#8B0000'?'arr-red':color==='#C9A84C'?'arr-w':'arr'; }
+  function mkFor(color){ return color==='#D4798A'?'arr-r':color==='#2C7BB6'?'arr-b':color==='#7B6A5A'?'arr-sv':color==='#8B0000'?'arr-red':color==='#C9A84C'?'arr-w':color==='#8E6BA8'?'arr-co':'arr'; }
   function node(cx,yTop,title,sub,color){
     const x=cx-NW/2,t1=title.length>20?title.slice(0,19)+'…':title;
     const s1=sub?(sub.length>24?sub.slice(0,23)+'…':sub):'';
@@ -4131,12 +4559,16 @@ function buildSVG(){
         if(yeast) els.push(`<text x="${col.cx}" y="${busY-5}" text-anchor="middle" font-size="9" fill="#7A6358" font-family="Georgia">${yeast.name}</text>`);
         if(firstVarStage) els.push(`<line x1="${col.cx}" y1="${busY}" x2="${col.cx}" y2="${firstTop-5}" stroke="#999" stroke-width="2" marker-end="url(#arr)"/>`);
       });
-    } else if(firstVarStage){
+    } else if(firstVarStage&&cols.length){
       arrLine(nodeCx,gBot,nodeCx,firstTop);
     }
     cols.forEach(col=>{
       const {line,cx,roseCx,hasRose}=col;
       const yeast=yeastById(line.yeastId);
+      if(line.coWineId&&vis('primary')){
+        els.push(`<rect x="${cx-46}" y="${pTop-17}" width="92" height="14" rx="4" fill="#F3E8F7" stroke="#C9A8D6" stroke-width="1"/>`);
+        els.push(`<text x="${cx}" y="${pTop-6}" text-anchor="middle" font-size="9" fill="#6B3F7A" font-family="Georgia">🫙 co-ferment</text>`);
+      }
       if(vis('primary')){
         const primNames=eqNamesFor(line,'primaryEquipmentId');
         node(cx,pTop,primNames.length===1?primNames[0]:primNames.length>1?primNames.length+' tanks':'Primary',
@@ -4144,7 +4576,7 @@ function buildSVG(){
         if(vis('secondary')) arrLine(cx,pBot,cx,sTop);
       }
       if(vis('secondary')){
-        if(grapeNeedsSecondary(line.grapeId,false)){
+        if(needsSecondary(lineProtocol(line)).required){
           const secNames=eqNamesFor(line,'secondaryEquipmentId');
           node(cx,sTop,secNames.length===1?secNames[0]:secNames.length>1?secNames.length+' tanks':'Secondary',
             fmtGal(line.totalSecGal),'#3A5A7A');
@@ -4161,13 +4593,31 @@ function buildSVG(){
         }
         if(vis('secondary')){
           if(!vis('primary')) hArrow(cx+NW/2,sMid,roseCx-NW/2,'#D4798A',true);
-          if(grapeNeedsSecondary(line.grapeId,true))
+          if(line.coWineId?cofermentNeedsSecondary(wineById(line.coWineId),true):grapeNeedsSecondary(line.grapeId,true))
             node(roseCx,sTop,'🌹 Rosé Secondary',fmtGal(line.roseCalc.secondaryGal),'#C06080');
           else bypassNode(roseCx,sTop,'press → aging');
         }
         line.roseSrcY=vis('secondary')?sBot:vis('primary')?pBot:null;
       }
     });
+  });
+
+  // ── Co-ferment feeds: each variety runs down into the shared vessel ──
+  const nodeCxOf=new Map(grapeNodeInfo.map(g=>[g.grapeId,g.nodeCx]));
+  fermLines.forEach(line=>{
+    if(!line.coWineId||line.cx==null) return;
+    const laneY=gBot+34;
+    let fed=false;
+    (line.coParts||[]).forEach(part=>{
+      const ncx=nodeCxOf.get(part.grapeId);
+      if(ncx==null||Math.abs(ncx-line.cx)<0.5) return;   // its own column, already wired
+      els.push(`<line x1="${ncx}" y1="${gBot}" x2="${ncx}" y2="${laneY}" stroke="#8E6BA8" stroke-width="2"/>`);
+      els.push(`<line x1="${ncx}" y1="${laneY}" x2="${line.cx}" y2="${laneY}" stroke="#8E6BA8" stroke-width="2"/>`);
+      els.push(`<text x="${(ncx+line.cx)/2}" y="${laneY-4}" text-anchor="middle" font-size="9" fill="#6B3F7A" font-family="Georgia">${Math.round(part.needLbs)} lbs ${esc(part.name)}</text>`);
+      fed=true;
+    });
+    if(fed&&firstVarStage)
+      els.push(`<line x1="${line.cx}" y1="${laneY}" x2="${line.cx}" y2="${firstTop-5}" stroke="#8E6BA8" stroke-width="2" marker-end="url(#arr-co)"/>`);
   });
 
   // ── Section 1 arrows: near-vertical drops into aligned SV cards ──
@@ -4570,6 +5020,31 @@ function createBlendFromIdea(tplIdx,agingGal){
     roseYeastId:null,yeastId:null,useTankSplit:false,tanks:[]});
   S.ui.wineId=id; S.ui.showBlendIdeas=false; render();
 }
+// Switching a blend to a co-ferment keeps the varieties and their ratios —
+// what changes is that they now share one vessel, one yeast and one protocol.
+function setBlendMode(id,mode){
+  const w=wineById(id); if(!w) return;
+  w.blendMode=(mode==='coferment')?'coferment':'separate';
+  if(w.blendMode==='coferment'){
+    if(!w.yeastId) w.yeastId=(w.components||[]).map(c=>c.yeastId||(c.tanks&&c.tanks[0]&&c.tanks[0].yeastId)).find(Boolean)||null;
+    if(!w.primaryEquipmentId) w.primaryEquipmentId=(w.components||[]).map(c=>c.primaryEquipmentId).find(Boolean)||null;
+    if(!w.secondaryEquipmentId) w.secondaryEquipmentId=(w.components||[]).map(c=>c.secondaryEquipmentId).find(Boolean)||null;
+    // one fermentation means no per-variety tank splits or per-variety bleeds
+    (w.components||[]).forEach(c=>{ c.useTankSplit=false; c.hasRose=false; });
+    w.useTankSplit=false;
+  }
+  render();
+}
+function setRatioBasis(id,basis){
+  const w=wineById(id); if(!w) return;
+  w.ratioBasis=(basis==='weight')?'weight':'volume';
+  render();
+}
+function setCofermentProtocol(id,pid,isRose){
+  const w=wineById(id); if(!w) return;
+  if(isRose===true||isRose==='true') w.cofermentRoseProtocolId=pid; else w.cofermentProtocolId=pid;
+  render();
+}
 function delWine(id){ if(!confirm('Delete this wine project?')) return; S.wines=S.wines.filter(w=>w.id!==id); S.ui.wineId=S.wines[0]?.id||null; render(); }
 function updateWine(id,key,val){
   const w=wineById(id); if(!w) return; w[key]=val;
@@ -4670,7 +5145,7 @@ function actualMust(rec,line){
 function actualFruitLbs(rec,line){
   const v=rec&&rec.volumes;
   if(v&&+v.fruitLbs>0) return +v.fruitLbs;
-  return line.mustGal*grapeRatio(grapeById(line.grapeId));
+  return line.mustGal*lineLbsPerGal(line);
 }
 // lbs of fruit per gallon of must, as actually measured
 function measuredYield(rec){
@@ -4721,9 +5196,9 @@ function applyMeasuredYield(key,grapeId){
 function trkVolumePanel(line,rec){
   recVolumes(rec);
   const v=rec.volumes;
-  const plannedLbs=line.mustGal*grapeRatio(grapeById(line.grapeId));
+  const plannedLbs=line.mustGal*lineLbsPerGal(line);
   const yieldRate=measuredYield(rec);
-  const plannedRate=grapeRatio(grapeById(line.grapeId));
+  const plannedRate=lineLbsPerGal(line);
   const delta=(a,b)=>{ if(!(a>0)||!(b>0)) return ''; const d=((a-b)/b)*100;
     if(Math.abs(d)<0.5) return '<span class="txt-m" style="font-size:11px">on plan</span>';
     const c=d>0?'#5D8A5E':'#C0703A';
@@ -4773,7 +5248,7 @@ function trkVolumePanel(line,rec){
     <div class="fg"><label class="lbl">Measured extraction</label>
       <div class="fc fc-ro">${yieldRate?`${yieldRate.toFixed(2)} lbs/gal`:'—'}</div>
       <div class="txt-s txt-m" style="font-size:10px;margin-top:2px">
-        ${yieldRate?`Planned ${plannedRate.toFixed(2)} lbs/gal${Math.abs(yieldRate-plannedRate)>0.1?` · <a href="#" onclick="applyMeasuredYield('${line.key}','${line.grapeId}');return false" style="color:var(--burg)">use this for ${esc(grapeById(line.grapeId)?.name||'the grape')}</a>`:''}`
+        ${yieldRate?`Planned ${plannedRate.toFixed(2)} lbs/gal${(!line.coWineId&&Math.abs(yieldRate-plannedRate)>0.1)?` · <a href="#" onclick="applyMeasuredYield('${line.key}','${line.grapeId}');return false" style="color:var(--burg)">use this for ${esc(grapeById(line.grapeId)?.name||'the grape')}</a>`:''}${line.coWineId?' · blended rate across the varieties':''}`
           :'Enter both weight and volume'}</div></div>
   </div>
   ${(+v.mustGal>0)?`<div class="info-note mb8" style="font-size:11px">✔ Doses and stage volumes on this batch are now based on the measured <b>${fmtGal(+v.mustGal)}</b>, not the planned ${fmtGal(line.mustGal)}.</div>`:''}
@@ -4911,7 +5386,7 @@ function renderProtocolDetail(p){
   const sec=needsSecondary(p);
   const grapesUsing=S.grapes.filter(g=>grapeProtocolId(g)===p.id||g.roseProtocolId===p.id);
   const lineIssues=getTrackingLines()
-    .filter(l=>protocolForLine(l.grapeId,l.isRose)?.id===p.id)
+    .filter(l=>lineProtocol(l)?.id===p.id)
     .map(l=>({line:l,issues:checkLine(l)}))
     .filter(x=>x.issues.length>issues.length);
 
