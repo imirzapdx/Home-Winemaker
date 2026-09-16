@@ -3574,15 +3574,101 @@ function trkReadingsPanel(key,rec){
       <button class="btn btn-p btn-sm" onclick="addReading('${key}')">+ Add reading</button>
     </div>`;
 }
+// The two biological additions that define a batch: the yeast you pitch and
+// the ML culture. They live in rec.additions like everything else — so they
+// roll up into the season's chemical totals and survive a profile save — but
+// they get their own panel, because a pitch carries a strain and a rate rather
+// than just a dose, and it is the one entry you want to find again later.
+function pitchOf(rec,kind){ return (rec.additions||[]).find(a=>a.kind===kind)||null; }
+function suggestedYeastGrams(mustGal){ return Math.round(mustGal*(S.ui.yeastRate||1)); }
+// Rehydration nutrient the protocol already calls for, if any
+function rehydrationHint(line,mustGal){
+  const p=lineProtocol(line); if(!p) return null;
+  const a=(p.additions||[]).find(x=>/Go-Ferm/i.test(x.product));
+  if(!a) return null;
+  const base=lineVolumes(line,mustGal)[a.basis]; if(base==null) return null;
+  return {product:a.product, grams:Math.round((+a.rate||0)*base*10)/10};
+}
+function trkInoculationPanel(line,rec,mustGal){
+  const key=line.key;
+  const p=lineProtocol(line);
+  const planned=yeastById(line.yeastId);
+  const yPitch=pitchOf(rec,'yeast'), mPitch=pitchOf(rec,'ml');
+  const sugg=suggestedYeastGrams(mustGal);
+  const rehyd=rehydrationHint(line,mustGal);
+  const mlMode=(p&&p.mlf&&p.mlf.mode)||'none';
+  const culture=(p&&p.mlf&&p.mlf.culture)||null;
+  const wineGal=lineVolumes(line,mustGal).gal_wine;
+  const showMl=rec.ml&&rec.ml.enabled;
+  const mlWhen=rec.ml&&rec.ml.timing==='simultaneous'
+    ? 'Co-inoculated — goes in with the yeast, at the start of the primary.'
+    : 'Sequential — goes in once the primary is dry, in the secondary vessel.';
+
+  const yeastCard=`<div class="comp-card">
+    <div class="comp-card-hdr">
+      <div><div class="comp-card-eyebrow">Yeast</div>
+        <span class="comp-card-title">${planned?esc(planned.fullName||planned.name):'⚠ no strain chosen on the project'}
+          ${yPitch?'<span class="ok" style="font-size:11px;margin-left:8px">✔ pitched</span>':''}</span></div>
+      ${yPitch?`<button class="btn btn-d btn-xs" onclick="delAddition('${key}','${yPitch.id}')">✕ Clear</button>`:''}
+    </div>
+    ${yPitch
+      ? `<div class="txt-s" style="font-size:12px">Pitched <b>${yPitch.date}</b> — ${esc(yPitch.product)}${yPitch.amount!=null?` · <b>${yPitch.amount} g</b>`:''}${yPitch.notes?` · ${esc(yPitch.notes)}`:''}</div>`
+      : `<div class="txt-s txt-m mb8" style="font-size:11px">Suggested: <b>${sugg} g</b> at ${(S.ui.yeastRate||1)} g/gal over ${fmtGal(mustGal)} of must${rehyd?` · rehydrate with <b>${rehyd.grams} g</b> ${esc(rehyd.product)}`:''}.</div>
+        <div class="trk-form">
+          <div class="fg"><label class="lbl">Date</label><input class="fc" type="date" id="inoc-y-date" value="${todayStr()}"></div>
+          <div class="fg" style="min-width:200px"><label class="lbl">Strain pitched</label>
+            <select class="fc" id="inoc-y-strain">${yeastOpts(line.yeastId,'')}</select></div>
+          <div class="fg"><label class="lbl">Grams</label>
+            <input class="fc trk-num" type="number" step="0.1" id="inoc-y-amount" placeholder="${sugg}"></div>
+          <div class="fg" style="flex:1;min-width:130px"><label class="lbl">Notes</label>
+            <input class="fc" id="inoc-y-notes" placeholder="rehydration temp, must temp…"></div>
+          <button class="btn btn-p btn-sm" onclick="logYeastPitch('${key}')">+ Log the pitch</button>
+        </div>`}
+  </div>`;
+
+  const mlCard=!showMl?'':`<div class="comp-card">
+    <div class="comp-card-hdr">
+      <div><div class="comp-card-eyebrow">Malolactic</div>
+        <span class="comp-card-title">${culture&&culture!=='native'?esc(culture):'Native / uninoculated'}
+          ${mPitch?'<span class="ok" style="font-size:11px;margin-left:8px">✔ inoculated</span>':''}</span></div>
+      ${mPitch?`<button class="btn btn-d btn-xs" onclick="delAddition('${key}','${mPitch.id}')">✕ Clear</button>`:''}
+    </div>
+    ${mPitch
+      ? `<div class="txt-s" style="font-size:12px">Inoculated <b>${mPitch.date}</b> — ${esc(mPitch.product)}${mPitch.amount!=null?` · <b>${mPitch.amount} ${esc(mPitch.unit||'')}</b>`:''}${mPitch.notes?` · ${esc(mPitch.notes)}`:''}</div>`
+      : `<div class="txt-s txt-m mb8" style="font-size:11px">${esc(mlWhen)} Treats ${fmtGal(wineGal)} of wine — cultures are usually sold by the volume they cover, one sachet per 66 gal.</div>
+        <div class="trk-form">
+          <div class="fg"><label class="lbl">Date</label><input class="fc" type="date" id="inoc-m-date" value="${todayStr()}"></div>
+          <div class="fg" style="min-width:170px"><label class="lbl">Culture</label>
+            <input class="fc" id="inoc-m-product" value="${culture&&culture!=='native'?esc(culture):''}" placeholder="VP41, CH16…"></div>
+          <div class="fg"><label class="lbl">Amount</label>
+            <input class="fc trk-num" type="number" step="0.01" id="inoc-m-amount" placeholder="dose"></div>
+          <div class="fg"><label class="lbl">Unit</label>
+            <select class="fc" id="inoc-m-unit" style="width:auto">${ADDITIVE_UNITS.map(u=>`<option value="${u}" ${u==='g'?'selected':''}>${u}</option>`).join('')}</select></div>
+          <div class="fg" style="flex:1;min-width:120px"><label class="lbl">Notes</label>
+            <input class="fc" id="inoc-m-notes" placeholder="nutrient, temp…"></div>
+          <button class="btn btn-p btn-sm" onclick="logMlPitch('${key}')">+ Log ML inoculation</button>
+        </div>`}
+  </div>`;
+
+  const nudge=(!yPitch&&rec.stage==='primary')
+    ? `<div class="info-note mb8" style="font-size:11px">⚠ The pitch isn't logged yet. Record it on crush day — every Brix reading after this is measured against it.</div>` : '';
+  const mlNote=(!showMl&&mlMode==='none')
+    ? `<div class="txt-s txt-m" style="font-size:11px">No malolactic planned on this protocol, so there is nothing to inoculate.</div>` : '';
+
+  return `<div class="sdiv">🧫 Inoculation</div>
+    <div class="info-note mb8" style="font-size:11px">The biology you add, kept apart from the chemistry: which strain went in, how much, and when. Logged pitches roll into the season's totals in Supplies.</div>
+    ${nudge}${yeastCard}${mlCard}${mlNote}`;
+}
 function trkAdditionsPanel(key,rec){
   const addOptions=`<option value="">— pick / type below —</option>`+ADDITIVE_GROUPS.map(([grp,items])=>
     `<optgroup label="${grp}">${items.map(n=>`<option value="${n}">${n}</option>`).join('')}</optgroup>`).join('')
     +`<option value="__custom">➕ Other (use text field)</option>`;
-  return `<div class="sdiv">🧫 Additions & Chemistry</div>
-    <div class="info-note mb8" style="font-size:11px">Log nutrients, enzymes, tannins, acid, ML cultures, SO₂ and fining agents with dose and stage.</div>
-    ${rec.additions.length?`<table class="tbl"><thead><tr>
+  const chem=(rec.additions||[]).filter(a=>!a.kind);   // pitches live in their own panel
+  return `<div class="sdiv">⚗️ Additions & Chemistry</div>
+    <div class="info-note mb8" style="font-size:11px">Log nutrients, enzymes, tannins, acid, SO₂ and fining agents with dose and stage. Yeast and ML inoculations go in the Inoculation panel above.</div>
+    ${chem.length?`<table class="tbl"><thead><tr>
       <th>Date</th><th>Stage</th><th>Product</th><th>Dose</th><th>Notes</th><th></th>
-    </tr></thead><tbody>${[...rec.additions].sort((a,b)=>a.date<b.date?-1:1).map(a=>`
+    </tr></thead><tbody>${[...chem].sort((a,b)=>a.date<b.date?-1:1).map(a=>`
       <tr>
         <td style="white-space:nowrap">${a.date}</td>
         <td>${TRACK_STAGE_LABELS[a.stage]?.replace(/^\S+ /,'')||a.stage||'—'}</td>
@@ -3692,6 +3778,7 @@ function renderTrackingDetail(line){
   const curIdx=stages.indexOf(rec.stage);
   const stepper=trkStepperHTML(rec,stages,stageVolumes(mustGal,hasSec));
   const nextStage=curIdx>=0&&curIdx<stages.length-1?stages[curIdx+1]:null;
+  const inoculationPanel=trkInoculationPanel(line,rec,mustGal);
   const additionsPanel=trkAdditionsPanel(line.key,rec);
   const processPanel=trkProcessPanel(line.key,rec);
   const recsPanel=trkRecsPanel(rec,line);
@@ -3773,6 +3860,8 @@ function renderTrackingDetail(line){
         ${curIdx>0?`<button class="btn btn-s btn-sm" onclick="undoStage('${line.key}')" title="Go back one step">↩ Back a step</button>`:''}
       </div>
 
+      ${inoculationPanel}
+
       ${trkReadingsPanel(line.key,rec)}
 
       ${additionsPanel}
@@ -3818,6 +3907,34 @@ function addAddition(key){
     amount:amtRaw===''||amtRaw==null?null:parseFloat(amtRaw),
     unit:document.getElementById('add-unit')?.value||'',
     notes:document.getElementById('add-notes')?.value.trim()||''});
+  render();
+}
+function logYeastPitch(key){
+  const rec=logRec(key); if(!rec) return;
+  const sel=document.getElementById('inoc-y-strain')?.value||'';
+  const y=sel?yeastById(sel):null;
+  if(!y) return alert('Pick the strain you pitched.');
+  const amtRaw=document.getElementById('inoc-y-amount')?.value;
+  rec.additions=rec.additions.filter(a=>a.kind!=='yeast');   // one pitch per batch
+  rec.additions.push({id:uid(),kind:'yeast',yeastId:sel,
+    date:document.getElementById('inoc-y-date')?.value||todayStr(),
+    stage:rec.stage||'primary', product:y.fullName||y.name,
+    amount:amtRaw===''||amtRaw==null?null:parseFloat(amtRaw), unit:'g',
+    notes:document.getElementById('inoc-y-notes')?.value.trim()||''});
+  render();
+}
+function logMlPitch(key){
+  const rec=logRec(key); if(!rec) return;
+  const product=(document.getElementById('inoc-m-product')?.value||'').trim();
+  if(!product) return alert('Name the ML culture you used.');
+  const amtRaw=document.getElementById('inoc-m-amount')?.value;
+  rec.additions=rec.additions.filter(a=>a.kind!=='ml');
+  rec.additions.push({id:uid(),kind:'ml',
+    date:document.getElementById('inoc-m-date')?.value||todayStr(),
+    stage:rec.stage||'secondary', product,
+    amount:amtRaw===''||amtRaw==null?null:parseFloat(amtRaw),
+    unit:document.getElementById('inoc-m-unit')?.value||'g',
+    notes:document.getElementById('inoc-m-notes')?.value.trim()||''});
   render();
 }
 function delAddition(key,id){ const rec=logRec(key); if(!rec)return; rec.additions=rec.additions.filter(a=>a.id!==id); render(); }

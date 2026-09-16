@@ -1,10 +1,41 @@
-# Build notes — co-fermentation
+# Build notes — co-fermentation, inoculation log
 
-5,484 → 5,959 lines. **191 tests passing** (145 before). Run with:
+5,484 → 6,077 lines. **209 tests passing** (145 before). Run with:
 
 ```
 python3 build_harness.py && node test_app.js
 ```
+
+---
+
+## Inoculation gets its own panel in Tracking
+
+Yeast was missing from the log entirely — the additions dropdown covered
+nutrients, enzymes, tannins, acid, SO₂ and fining agents, but there was no way
+to record the strain you actually pitched. It now has a dedicated **🧫
+Inoculation** section, sitting above the readings, because a pitch carries a
+strain and a rate rather than just a dose, and it's the one entry you want to
+find again in February.
+
+**Yeast.** Shows the strain the project plans, the suggested grams (must volume
+× the season rate from Supplies) and the rehydration nutrient the protocol
+already calls for, worked out for this batch. Log it with a date, the strain you
+actually used, grams and a note for rehydration and must temperature. One pitch
+per batch — logging again replaces it rather than stacking a second row. Until
+it's logged, a nudge sits at the top of the panel, since every Brix reading
+afterwards is measured against it.
+
+**Malolactic.** Appears only when the batch plans an ML. It prefills the culture
+from the protocol and states when it goes in — with the yeast for co-inoculated,
+after the primary for sequential — along with the volume of wine it has to
+treat. Where the protocol plans no ML, the panel says so instead of offering an
+empty control.
+
+Both pitches are stored in the batch's existing additions list with a `kind`
+flag rather than in a parallel structure. That means they roll into the season's
+totals in Supplies and survive a profile save with no extra plumbing, while the
+Additions & Chemistry table filters them out so nothing is listed twice. Old
+records with no pitches render exactly as before.
 
 ---
 

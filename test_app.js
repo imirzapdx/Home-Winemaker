@@ -20,6 +20,13 @@ function makeEl() {
   return el;
 }
 const content = makeEl(); content.id = 'content';
+// Form fields the app reads back with getElementById — tests fill these in.
+const FIELDS = {};
+const withFields = (vals, fn) => {
+  Object.keys(FIELDS).forEach(k => delete FIELDS[k]);
+  Object.assign(FIELDS, vals);
+  try { return fn(); } finally { Object.keys(FIELDS).forEach(k => delete FIELDS[k]); }
+};
 const store = {};
 const sandbox = {
   console,
@@ -30,7 +37,12 @@ const sandbox = {
   },
   document: {
     activeElement: null,
-    getElementById: id => (id === 'content' ? content : makeEl()),
+    getElementById: id => {
+      if (id === 'content') return content;
+      const el = makeEl();
+      if (Object.prototype.hasOwnProperty.call(FIELDS, id)) el.value = FIELDS[id];
+      return el;
+    },
     querySelector: () => makeEl(),
     querySelectorAll: () => [],
     createElement: () => makeEl(),
@@ -1709,6 +1721,214 @@ t('a co-ferment is badged as one everywhere it is listed', () => {
   const html = A.renderTab();
   ok(html.includes('Co-Ferment</span>'), 'the detail header');
   ok(html.includes('>co-ferment</span>'), 'the sidebar chip');
+  reset();
+});
+
+/* ══════════════════════════════════════════════════════════
+   FEATURE — Inoculation log
+   ══════════════════════════════════════════════════════════ */
+
+// w2 is the shipped Chardonnay single varietal on mj-m02.
+const startBatch = (key) => { A.startTracking(key); return A.trackingRec(key); };
+const chardKey = () => A.getTrackingLines().find(l => l.grapeId === 'g3').key;
+
+t('the inoculation panel names the planned strain and a dose', () => {
+  reset();
+  const key = chardKey();
+  startBatch(key);
+  S().ui.tab = 'tracking'; S().ui.trackKey = key;
+  const html = A.renderTab();
+  ok(html.includes('Inoculation'), 'the section exists');
+  ok(html.includes('M02'), 'it names the strain from the project');
+  ok(html.includes('g/gal'), 'and states the rate it suggested from');
+  ok(html.includes('logYeastPitch'), 'with a control to log the pitch');
+  S().ui.trackKey = null; reset();
+});
+t('the suggested dose follows must volume and the season rate', () => {
+  reset();
+  S().ui.yeastRate = 1;
+  const line = A.getTrackingLines().find(l => l.grapeId === 'g3');
+  eq(A.suggestedYeastGrams(line.mustGal), Math.round(line.mustGal));
+  S().ui.yeastRate = 2;
+  eq(A.suggestedYeastGrams(line.mustGal), Math.round(line.mustGal * 2));
+  S().ui.yeastRate = 1;
+  reset();
+});
+t('the rehydration hint comes off the batch protocol', () => {
+  reset();
+  const line = A.getTrackingLines().find(l => l.grapeId === 'g3');
+  const hint = A.rehydrationHint(line, line.mustGal);
+  ok(hint, 'the white protocol calls for a rehydration nutrient');
+  ok(/Go-Ferm/.test(hint.product));
+  ok(hint.grams > 0, 'and it works out a real dose');
+  reset();
+});
+t('a pitch is recorded once, with its strain', () => {
+  reset();
+  const key = chardKey();
+  const rec = startBatch(key);
+  withFields({ 'inoc-y-date': '2026-09-20', 'inoc-y-strain': 'mj-m02',
+               'inoc-y-amount': '9', 'inoc-y-notes': 'rehydrated at 40C' },
+    () => A.logYeastPitch(key));
+  const p = A.pitchOf(rec, 'yeast');
+  ok(p, 'the pitch is stored');
+  eq(p.date, '2026-09-20');
+  eq(p.amount, 9);
+  eq(p.unit, 'g');
+  eq(p.yeastId, 'mj-m02');
+  ok(p.product.includes('M02'), 'the product is the strain name');
+  reset();
+});
+t('re-logging replaces the pitch rather than stacking a second one', () => {
+  reset();
+  const key = chardKey();
+  const rec = startBatch(key);
+  withFields({ 'inoc-y-strain': 'mj-m02', 'inoc-y-amount': '9' }, () => A.logYeastPitch(key));
+  withFields({ 'inoc-y-strain': 'mj-m06', 'inoc-y-amount': '11' }, () => A.logYeastPitch(key));
+  eq(rec.additions.filter(a => a.kind === 'yeast').length, 1, 'one vessel, one pitch');
+  eq(A.pitchOf(rec, 'yeast').amount, 11);
+  reset();
+});
+t('a pitch with no strain chosen is refused', () => {
+  reset();
+  const key = chardKey();
+  const rec = startBatch(key);
+  withFields({ 'inoc-y-strain': '' }, () => A.logYeastPitch(key));
+  eq(A.pitchOf(rec, 'yeast'), null, 'nothing should be written');
+  reset();
+});
+t('the pitch stays out of the chemistry table', () => {
+  reset();
+  const key = chardKey();
+  const rec = startBatch(key);
+  withFields({ 'inoc-y-strain': 'mj-m02', 'inoc-y-amount': '9' }, () => A.logYeastPitch(key));
+  withFields({ 'add-select': 'Bentonite', 'add-amount': '20', 'add-unit': 'g' },
+    () => A.addAddition(key));
+  const chem = A.trkAdditionsPanel(key, rec);
+  ok(chem.includes('Bentonite'), 'ordinary additions still list');
+  ok(!chem.includes('M02'), 'the pitch is not duplicated here');
+  ok(chem.includes('Inoculation panel above'), 'and the note says where it went');
+  reset();
+});
+t('clearing a pitch removes it', () => {
+  reset();
+  const key = chardKey();
+  const rec = startBatch(key);
+  withFields({ 'inoc-y-strain': 'mj-m02' }, () => A.logYeastPitch(key));
+  A.delAddition(key, A.pitchOf(rec, 'yeast').id);
+  eq(A.pitchOf(rec, 'yeast'), null);
+  reset();
+});
+t('a logged pitch reaches the season totals in Supplies', () => {
+  reset();
+  const key = chardKey();
+  startBatch(key);
+  withFields({ 'inoc-y-strain': 'mj-m02', 'inoc-y-amount': '9' }, () => A.logYeastPitch(key));
+  const row = A.getChemicalTotals().find(r => r.product.includes('M02'));
+  ok(row, 'the strain shows up under what was actually used');
+  eq(row.total, 9);
+  reset();
+});
+t('the nudge appears until the pitch is logged', () => {
+  reset();
+  const key = chardKey();
+  const rec = startBatch(key);
+  const line = A.getTrackingLines().find(l => l.key === key);
+  ok(A.trkInoculationPanel(line, rec, line.mustGal).includes("isn't logged yet"));
+  withFields({ 'inoc-y-strain': 'mj-m02' }, () => A.logYeastPitch(key));
+  const after = A.trkInoculationPanel(line, rec, line.mustGal);
+  ok(!after.includes("isn't logged yet"), 'and goes once it is');
+  ok(after.includes('pitched'), 'replaced by the record');
+  reset();
+});
+
+/* ── malolactic side ── */
+t('no ML planned means nothing to inoculate', () => {
+  reset();
+  const key = chardKey();                       // white-aromatic-noml
+  const rec = startBatch(key);
+  const line = A.getTrackingLines().find(l => l.key === key);
+  const html = A.trkInoculationPanel(line, rec, line.mustGal);
+  ok(html.includes('No malolactic planned'), 'the panel says so plainly');
+  ok(!html.includes('logMlPitch'), 'and offers no control');
+  reset();
+});
+t('sequential MLF explains when the culture goes in', () => {
+  reset();
+  S().grapes[2].protocolId = 'red-classic-ml';
+  const key = chardKey();
+  const rec = startBatch(key);
+  const line = A.getTrackingLines().find(l => l.key === key);
+  const html = A.trkInoculationPanel(line, rec, line.mustGal);
+  ok(html.includes('Sequential'), 'the timing is named');
+  ok(html.includes('VP41'), 'the culture is prefilled from the protocol');
+  ok(html.includes('logMlPitch'), 'and it can be logged');
+  reset();
+});
+t('co-inoculated MLF says it goes in with the yeast', () => {
+  reset();
+  S().grapes[2].protocolId = 'red-coinoc-ml';
+  const key = chardKey();
+  const rec = startBatch(key);
+  const line = A.getTrackingLines().find(l => l.key === key);
+  ok(A.trkInoculationPanel(line, rec, line.mustGal).includes('Co-inoculated'));
+  reset();
+});
+t('an ML inoculation is recorded once', () => {
+  reset();
+  S().grapes[2].protocolId = 'red-classic-ml';
+  const key = chardKey();
+  const rec = startBatch(key);
+  withFields({ 'inoc-m-date': '2026-10-05', 'inoc-m-product': 'VP41',
+               'inoc-m-amount': '2.5', 'inoc-m-unit': 'g' }, () => A.logMlPitch(key));
+  const p = A.pitchOf(rec, 'ml');
+  ok(p); eq(p.product, 'VP41'); eq(p.amount, 2.5); eq(p.date, '2026-10-05');
+  withFields({ 'inoc-m-product': 'CH16' }, () => A.logMlPitch(key));
+  eq(rec.additions.filter(a => a.kind === 'ml').length, 1);
+  reset();
+});
+t('an unnamed ML culture is refused', () => {
+  reset();
+  S().grapes[2].protocolId = 'red-classic-ml';
+  const key = chardKey();
+  const rec = startBatch(key);
+  withFields({ 'inoc-m-product': '  ' }, () => A.logMlPitch(key));
+  eq(A.pitchOf(rec, 'ml'), null);
+  reset();
+});
+
+/* ── co-ferments and persistence ── */
+t('a co-ferment gets one pitch for the whole vessel', () => {
+  const w = mkCo();
+  const key = 'co::' + w.id;
+  const rec = startBatch(key);
+  const line = A.getTrackingLines().find(l => l.key === key);
+  const html = A.trkInoculationPanel(line, rec, line.mustGal);
+  ok(html.includes('VR21'), 'the co-ferment yeast is the planned strain');
+  withFields({ 'inoc-y-strain': 'mj-vr21', 'inoc-y-amount': '37' }, () => A.logYeastPitch(key));
+  eq(rec.additions.filter(a => a.kind === 'yeast').length, 1);
+  reset();
+});
+t('pitches survive a profile round-trip', () => {
+  reset();
+  const key = chardKey();
+  startBatch(key);
+  withFields({ 'inoc-y-strain': 'mj-m02', 'inoc-y-amount': '9' }, () => A.logYeastPitch(key));
+  const prof = JSON.parse(JSON.stringify(A.stateToProfile('T', 'pT')));
+  reset();
+  A.loadProfileIntoState(prof);
+  const back = A.pitchOf(S().tracking[key], 'yeast');
+  ok(back && back.amount === 9 && back.kind === 'yeast');
+  reset();
+});
+t('an old record with no pitches still renders', () => {
+  reset();
+  const key = chardKey();
+  const rec = startBatch(key);
+  rec.additions = [{ id: 'x1', date: '2026-09-01', stage: 'primary', product: 'Bentonite', amount: 5, unit: 'g', notes: '' }];
+  const line = A.getTrackingLines().find(l => l.key === key);
+  ok(A.trkInoculationPanel(line, rec, line.mustGal).length > 50);
+  ok(A.trkAdditionsPanel(key, rec).includes('Bentonite'));
   reset();
 });
 
