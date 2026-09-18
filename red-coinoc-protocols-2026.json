@@ -1,0 +1,210 @@
+[
+  {
+    "id": "p-coinoc-mlprime-2026",
+    "name": "Red — co-inoculated MLF (ML Prime)",
+    "color": "red",
+    "builtin": false,
+    "desc": "High-pH, low-acid reds. L. plantarum goes in 24 h after the yeast and finishes MLF in 3–10 days, during primary. Requires pH ≥3.4 at pitch — NO acid additions until malic is done.",
+    "ferment": {
+      "yeastStrategy": "cultured",
+      "bioprotection": null,
+      "coldSoakDays": 0,
+      "macerate": true,
+      "pressAt": "dryness"
+    },
+    "mlf": {
+      "mode": "simultaneous",
+      "culture": "ML Prime",
+      "nutrient": null
+    },
+    "post": {
+      "coldStabilize": false,
+      "filter": "none"
+    },
+    "additions": [
+      {
+        "stage": "crush",
+        "product": "Potassium Metabisulfite (KMS)",
+        "rate": 0.2,
+        "basis": "gal_must",
+        "note": "~30 ppm. ML Prime tolerates 50 ppm total, so this is comfortable."
+      },
+      {
+        "stage": "crush",
+        "product": "Lallzyme EX",
+        "rate": 0.1,
+        "basis": "gal_must"
+      },
+      {
+        "stage": "crush",
+        "product": "Opti-Red",
+        "rate": 1.0,
+        "basis": "gal_must"
+      },
+      {
+        "stage": "postcrush",
+        "product": "FT Rouge",
+        "rate": 1.3,
+        "basis": "gal_must",
+        "min": 0.8,
+        "max": 1.9,
+        "note": "8 h after the enzyme"
+      },
+      {
+        "stage": "inoculation",
+        "product": "Go-Ferm Protect",
+        "rate": 1.25,
+        "basis": "gal_must"
+      },
+      {
+        "stage": "ml",
+        "product": "ML Prime Malolactic Bacteria",
+        "rate": 0.38,
+        "basis": "gal_must",
+        "note": "24 h after yeast pitch. No rehydration. Pack is sized for 66 gal — split across lots crushed the same day. Cannot multiply in wine, so do not under-dose."
+      },
+      {
+        "stage": "ferment",
+        "product": "Fermaid O",
+        "rate": 0.95,
+        "basis": "gal_must",
+        "note": "At 1/3 sugar depletion. Organic N only — no DAP spikes."
+      },
+      {
+        "stage": "postml",
+        "product": "Tartaric Acid",
+        "rate": 0,
+        "basis": "gal_wine",
+        "note": "HOLD until malic reads below 0.03 g/L. Bench-trial to target then. Adding at crush drops pH under 3.4 and kills this protocol."
+      },
+      {
+        "stage": "postml",
+        "product": "Potassium Metabisulfite (KMS)",
+        "rate": 0.33,
+        "basis": "gal_wine",
+        "note": "Only after BOTH ferments test dry."
+      }
+    ],
+    "steps": [
+      "Crush and destem with reduced SO₂ (~30 ppm).",
+      "Lallzyme EX, then Opti-Red. FT Rouge 8 h after the enzyme.",
+      "GATE: measure pH at 12–24 h. If below 3.4, stop and use the VP41 protocol instead. Do not acidify to fix pH — do not acidify at all yet.",
+      "Correct Brix only if needed. Leave pH and TA alone.",
+      "Rehydrate and inoculate the yeast with Go-Ferm Protect.",
+      "24 h later, once fermentation is clearly active: add ML Prime, dry, to the cap surface.",
+      "Hold 68–80°F through primary. Below 68°F ML Prime stalls; above 80°F it is stressed.",
+      "Do not blend, combine, or top fermenting lots after the bacteria go in.",
+      "Fermaid O at 1/3 sugar depletion. Avoid DAP entirely.",
+      "Cap management as usual. Press at dryness.",
+      "Test malic — expect it done by day 3–10. Hold all SO₂ until it reads below 0.03 g/L.",
+      "Now bench-trial tartaric and correct pH/TA. Then SO₂ to 30–35 ppm free and rack to aging."
+    ]
+  },
+  {
+    "id": "p-coinoc-vp41-2026",
+    "name": "Red — co-inoculated MLF (VP41)",
+    "color": "red",
+    "builtin": false,
+    "desc": "Default co-inoculation for high-Brix reds and any lot under pH 3.4. O. oeni tolerant to 16% alc, pH 3.1, 60 ppm total SO₂. Falls back to sequential if the co-inoc stalls, so it is the low-regret choice.",
+    "ferment": {
+      "yeastStrategy": "cultured",
+      "bioprotection": null,
+      "coldSoakDays": 0,
+      "macerate": true,
+      "pressAt": "dryness"
+    },
+    "mlf": {
+      "mode": "simultaneous",
+      "culture": "VP41",
+      "nutrient": "Acti-ML"
+    },
+    "post": {
+      "coldStabilize": false,
+      "filter": "none"
+    },
+    "additions": [
+      {
+        "stage": "crush",
+        "product": "Potassium Metabisulfite (KMS)",
+        "rate": 0.25,
+        "basis": "gal_must",
+        "note": "~38 ppm. VP41 tolerates 60 ppm total; keep under 45 ppm or hold ferment at 64–72°F."
+      },
+      {
+        "stage": "crush",
+        "product": "Lallzyme EX",
+        "rate": 0.1,
+        "basis": "gal_must"
+      },
+      {
+        "stage": "crush",
+        "product": "Opti-Red",
+        "rate": 1.0,
+        "basis": "gal_must"
+      },
+      {
+        "stage": "crush",
+        "product": "Tartaric Acid",
+        "rate": 0,
+        "basis": "gal_must",
+        "note": "Bench-trial to target. Safe at crush with VP41 (pH floor 3.1), but leave headroom — MLF will raise pH again."
+      },
+      {
+        "stage": "postcrush",
+        "product": "FT Rouge",
+        "rate": 1.3,
+        "basis": "gal_must",
+        "min": 0.8,
+        "max": 1.9,
+        "note": "8 h after the enzyme"
+      },
+      {
+        "stage": "inoculation",
+        "product": "Go-Ferm Protect",
+        "rate": 1.25,
+        "basis": "gal_must"
+      },
+      {
+        "stage": "ml",
+        "product": "VP41",
+        "rate": 0.04,
+        "basis": "gal_must",
+        "note": "1 g/hL. Rehydrate 15 min in 20× chlorine-free water at ~68°F, then add 24–48 h after yeast pitch."
+      },
+      {
+        "stage": "ml",
+        "product": "Acti-ML",
+        "rate": 0.75,
+        "basis": "gal_must",
+        "note": "20 g/hL, with the bacteria."
+      },
+      {
+        "stage": "ferment",
+        "product": "Fermaid O",
+        "rate": 0.95,
+        "basis": "gal_must",
+        "note": "At 1/3 sugar depletion. Organic N is gentler on co-inoculated MLB."
+      },
+      {
+        "stage": "postml",
+        "product": "Potassium Metabisulfite (KMS)",
+        "rate": 0.33,
+        "basis": "gal_wine",
+        "note": "Only after BOTH ferments test dry."
+      }
+    ],
+    "steps": [
+      "Crush and destem at ~38 ppm SO₂.",
+      "Lallzyme EX, then Opti-Red. FT Rouge 8 h after the enzyme.",
+      "Correct pH/TA/Brix at 12–24 h. Tartaric is fine here — target no lower than 3.3 so MLF has somewhere to go.",
+      "Rehydrate and inoculate the yeast with Go-Ferm Protect.",
+      "24–48 h later, once fermentation is clearly active: rehydrate VP41, add with Acti-ML.",
+      "Hold 64–72°F if potential alcohol is over 15.5% or total SO₂ is over 45 ppm; otherwise 68–77°F is fine.",
+      "Fermaid O at 1/3 sugar depletion. Avoid DAP spikes.",
+      "Cap management as usual. Press at dryness.",
+      "Test malic weekly. If it has not moved by day 14, press at dryness and let VP41 finish sequentially in barrel — it tolerates 16% and is the recommended strain for restarts.",
+      "Hold all SO₂ until malic reads below 0.03 g/L.",
+      "SO₂ to 30–35 ppm free, rack to aging."
+    ]
+  }
+]
