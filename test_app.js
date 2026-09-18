@@ -121,8 +121,8 @@ t('calcWine works for single and blend', () => {
 /* ══════════════════════════════════════════════════════════
    FEATURE 1 — Protocol library
    ══════════════════════════════════════════════════════════ */
-t('10 presets ship', () => eq(A.PROTOCOL_PRESETS.length, 10));
-t('library returns builtins', () => eq(A.protocolLibrary().length, 10));
+t('11 presets ship', () => eq(A.PROTOCOL_PRESETS.length, 11));
+t('library returns builtins', () => eq(A.protocolLibrary().length, 11));
 t('every preset is structurally complete', () => A.PROTOCOL_PRESETS.forEach(p => {
   ok(p.id && p.name && p.color && p.desc, p.id + ': missing header fields');
   ok(p.ferment && p.mlf && p.post, p.id + ': missing method blocks');
@@ -1929,6 +1929,157 @@ t('an old record with no pitches still renders', () => {
   const line = A.getTrackingLines().find(l => l.key === key);
   ok(A.trkInoculationPanel(line, rec, line.mustGal).length > 50);
   ok(A.trkAdditionsPanel(key, rec).includes('Bentonite'));
+  reset();
+});
+
+/* ══════════════════════════════════════════════════════════
+   FEATURE — corrected co-inoculation protocols (2026 revision)
+   ══════════════════════════════════════════════════════════ */
+t('both co-inoculation protocols ship and skip the secondary', () => {
+  ['red-coinoc-ml', 'red-coinoc-mlprime'].forEach(id => {
+    const p = A.getProtocol(id);
+    ok(p, id + ' missing');
+    eq(p.mlf.mode, 'simultaneous', id + ' should co-inoculate');
+    eq(A.needsSecondary(p).required, false, id + ' should not need a secondary');
+  });
+});
+t('the ML culture is in the addition schedule, at the ML stage', () => {
+  const vp = A.getProtocol('red-coinoc-ml').additions.find(a => a.product === 'VP41');
+  const mp = A.getProtocol('red-coinoc-mlprime').additions.find(a => a.product === 'ML Prime');
+  ok(vp && vp.stage === 'ml', 'VP41 not scheduled');
+  ok(mp && mp.stage === 'ml', 'ML Prime not scheduled');
+  near(vp.rate, 0.04, 0.001, 'VP41 should be 1 g/hL');
+  near(mp.rate, 0.38, 0.001, 'ML Prime should be a 25 g pack per 66 gal');
+  near(mp.rate * 66, 25, 0.5, 'ML Prime pack sizing drifted');
+});
+t('ML cultures are catalogued, so nothing shows as an orphan', () => {
+  eq(A.productInfo('VP41').cat, 'ML Culture');
+  eq(A.productInfo('ML Prime').cat, 'ML Culture');
+  reset();
+  S().grapes.forEach(g => { g.protocolId = 'red-coinoc-mlprime'; });
+  const inUse = Object.keys(A.productsInUse());
+  const cat = A.productCatalog();
+  eq(inUse.filter(n => !cat[n]), [], 'protocol references an uncatalogued product');
+  reset();
+});
+t('a culture is billed once — as a sachet, not also by weight', () => {
+  reset();
+  S().grapes.forEach(g => { g.protocolId = 'red-coinoc-mlprime'; g.roseProtocolId = 'rose-saignee'; });
+  const chem = A.calcProtocolChemicals();
+  eq(chem.filter(r => r.product === 'ML Prime').length, 0, 'culture double-billed by weight');
+  const bio = A.calcProtocolBiologicals().find(b => b.product === 'ML Prime');
+  ok(bio && bio.cat === 'ML Culture', 'no sachet row for ML Prime');
+  ok(/sachet/.test(bio.pack));
+  reset();
+});
+t('a co-inoculated culture treats must volume, not post-press', () => {
+  reset();
+  S().grapes.forEach(g => { g.protocolId = 'red-coinoc-ml'; });
+  const lines = A.getTrackingLines().filter(l => !l.isRose);
+  const must = lines.reduce((s, l) => s + l.mustGal, 0);
+  near(A.calcProtocolBiologicals().find(b => b.product === 'VP41').total, must, 0.05,
+       'co-inoculation should dose the whole must');
+  S().grapes.forEach(g => { g.protocolId = 'red-classic-ml'; });
+  const must2 = A.getTrackingLines().filter(l => !l.isRose).reduce((s, l) => s + l.mustGal, 0);
+  near(A.calcProtocolBiologicals().find(b => b.product === 'VP41').total, must2 * A.LOSS.pToS, 0.05,
+       'a consecutive MLF only sees what came off the press');
+  reset();
+});
+t('a bench-trial addition stays on the shopping list with no quantity', () => {
+  reset();
+  S().grapes.forEach(g => { g.protocolId = 'red-coinoc-mlprime'; });
+  const row = A.calcProtocolChemicals().find(r => r.product === 'Tartaric Acid');
+  ok(row, 'bench-trial acid fell off the shopping list');
+  eq(row.total, 0, 'a bench-trial row should carry no quantity');
+  ok(row.benchTrial, 'row not flagged as bench trial');
+  ok(/bench trial/.test(A.shoppingListCSV()), 'CSV lost the bench-trial marker');
+  reset();
+});
+t('a zero-rate addition without the flag is still dropped', () => {
+  reset();
+  const p = JSON.parse(JSON.stringify(A.getProtocol('red-native')));
+  p.additions.push({ stage: 'aging', product: 'Bentonite', rate: 0, basis: 'gal_wine' });
+  S().protocols.push(Object.assign(p, { id: 'ptest', builtin: false }));
+  S().grapes.forEach(g => { g.protocolId = 'ptest'; g.roseProtocolId = 'ptest'; });
+  eq(A.calcProtocolChemicals().filter(r => r.product === 'Bentonite').length, 0);
+  reset();
+});
+t('ML Prime surfaces its pH gate and its lack of a fallback', () => {
+  const c = codes(A.checkProtocol(A.getProtocol('red-coinoc-mlprime'), {}));
+  ok(c.includes('MLB_PH_GATE'), 'no pH gate note');
+  ok(c.includes('MLB_NO_RESTART'), 'no restart warning');
+  ok(!c.includes('ACID_BEFORE_MLF'), 'post-ML acid should not trip the acid rule');
+});
+t('acidifying before the malic is gone is a conflict on a high-floor strain', () => {
+  const p = mutate('red-coinoc-mlprime', x => {
+    x.additions.push({ stage: 'crush', product: 'Tartaric Acid', rate: 2, basis: 'gal_must' });
+  });
+  ok(codes(A.checkProtocol(p, {})).includes('ACID_BEFORE_MLF'));
+});
+t('VP41 takes acid at crush, with a headroom note instead', () => {
+  const c = codes(A.checkProtocol(A.getProtocol('red-coinoc-ml'), {}));
+  ok(c.includes('ACID_BEFORE_MLF_HEADROOM'), 'no headroom note');
+  ok(!c.includes('ACID_BEFORE_MLF'), 'VP41 tolerates pH 3.1 — should not be a conflict');
+  ok(!c.includes('MLB_PH_GATE'), 'VP41 has no 3.4 gate');
+  ok(!c.includes('MLB_NO_RESTART'), 'VP41 can restart a stalled MLF');
+});
+t('SO2 limits follow the strain, not one fixed number', () => {
+  // 38 ppm is fine for VP41 (60 ppm ceiling) but not comfortable for ML Prime (50)
+  eq(codes(A.checkProtocol(A.getProtocol('red-coinoc-ml'), {})).filter(c => /^SO2_COINOC/.test(c)), []);
+  const hot = mutate('red-coinoc-mlprime', p => { p.additions[0].rate = 0.28; });   // ~42 ppm
+  ok(codes(A.checkProtocol(hot, {})).includes('SO2_COINOC'));
+  const over = mutate('red-coinoc-mlprime', p => { p.additions[0].rate = 0.40; });  // ~61 ppm
+  ok(codes(A.checkProtocol(over, {})).includes('SO2_COINOC_OVER'));
+});
+t('ML Prime cannot carry a consecutive MLF', () => {
+  const p = mutate('red-coinoc-mlprime', x => { x.mlf.mode = 'consecutive'; });
+  ok(codes(A.checkProtocol(p, {})).includes('MLB_NOT_SEQUENTIAL'));
+});
+t('strain limits drive the pH and alcohol warnings', () => {
+  ok(codes(A.checkProtocol(A.getProtocol('red-coinoc-mlprime'), { pH: 3.3 })).includes('MLF_LOW_PH'),
+     'pH 3.3 is under ML Prime floor');
+  eq(codes(A.checkProtocol(A.getProtocol('red-coinoc-ml'), { pH: 3.3 })).filter(c => c === 'MLF_LOW_PH'), [],
+     'pH 3.3 is fine for VP41');
+  ok(codes(A.checkProtocol(A.getProtocol('red-coinoc-mlprime'), { potentialAlc: 15.8 })).includes('MLF_HIGH_ALC'));
+  eq(codes(A.checkProtocol(A.getProtocol('red-coinoc-ml'), { potentialAlc: 15.8 })).filter(c => c === 'MLF_HIGH_ALC'), []);
+});
+t('a stale override on the corrected protocol is retired once', () => {
+  reset();
+  S().protocolEdits['red-coinoc-ml'] = { name: 'Old co-inoc', additions: [] };
+  S().protoRev = null;
+  A.migrateState();
+  ok(!S().protocolEdits['red-coinoc-ml'], 'stale schedule override survived');
+  // a fresh edit made after the revision is left alone
+  A.setProtoField('red-coinoc-ml', 'name', 'My co-inoc');
+  A.setProtoAdd('red-coinoc-ml', 0, 'rate', 0.22);
+  A.migrateState();
+  eq(A.getProtocol('red-coinoc-ml').name, 'My co-inoc', 'a current edit was wrongly discarded');
+  reset();
+});
+t('the revision marker survives a profile round-trip', () => {
+  reset();
+  const prof = JSON.parse(JSON.stringify(A.stateToProfile('T', 'pR')));
+  eq(prof.protoRev, 2026);
+  S().protoRev = null;
+  A.loadProfileIntoState(prof);
+  eq(S().protoRev, 2026);
+  reset();
+});
+t('both new protocols render their detail view', () => {
+  reset();
+  ['red-coinoc-ml', 'red-coinoc-mlprime'].forEach(id => {
+    const html = A.renderProtocolDetail(A.getProtocol(id));
+    ok(html.includes('Addition schedule'), id + ': detail view broken');
+    ok(html.includes('benchTrial'), id + ': no bench-trial control');
+  });
+  reset();
+});
+t('the shopping list shows a bench-trial row without a number', () => {
+  reset();
+  S().grapes.forEach(g => { g.protocolId = 'red-coinoc-mlprime'; });
+  const html = A.renderShoppingList();
+  ok(html.includes('Tartaric Acid'), 'acid missing from the list');
+  ok(html.includes('bench trial'), 'bench-trial row rendered as a quantity');
   reset();
 });
 

@@ -307,6 +307,7 @@ function stateToProfile(name, id){
     yeastEdits:JSON.parse(JSON.stringify(S.yeastEdits||{})),
     protocols:JSON.parse(JSON.stringify(S.protocols||[])),
     protocolEdits:JSON.parse(JSON.stringify(S.protocolEdits||{})),
+    protoRev:S.protoRev||null,
     purchased:JSON.parse(JSON.stringify(S.purchased||{})),
     customProducts:JSON.parse(JSON.stringify(S.customProducts||{})),
     tracking:JSON.parse(JSON.stringify(S.tracking||{}))};
@@ -321,6 +322,7 @@ function loadProfileIntoState(p){
   S.yeastEdits = p.yeastEdits||{};
   S.protocols = p.protocols||[];
   S.protocolEdits = p.protocolEdits||{};
+  S.protoRev = p.protoRev||null;
   S.purchased = p.purchased||{};
   S.customProducts = p.customProducts||{};
   S.ui.trackKey = null;
@@ -644,6 +646,15 @@ function migrateState(){
   if(!S.yeastEdits) S.yeastEdits = {};
   if(!S.protocols) S.protocols = [];
   if(!S.protocolEdits) S.protocolEdits = {};
+  // 'red-coinoc-ml' was corrected in the 2026 revision — the ML culture itself
+  // was never in the addition schedule, and the crush SO₂ was set below what
+  // VP41 actually tolerates. An override saved against the old base would
+  // silently reinstate the old schedule, so it is retired once, here.
+  if(S.protoRev !== 2026){
+    if(S.protocolEdits['red-coinoc-ml'] && S.protocolEdits['red-coinoc-ml'].additions)
+      delete S.protocolEdits['red-coinoc-ml'];
+    S.protoRev = 2026;
+  }
   if(!S.purchased) S.purchased = {};
   if(!S.customProducts) S.customProducts = {};
   if(!S.ui.calc) S.ui.calc = {};
@@ -782,6 +793,8 @@ const CHEM_CATALOG = {
   'DAP':                          {cat:'Nutrient',   packs:[100,454],    unit:'g', note:'Inorganic N — avoid late additions'},
   'ML nutrient (Opti-Malo)':      {cat:'ML Nutrient',packs:[100,500],    unit:'g', note:'Add with the ML culture'},
   'Acti-ML':                      {cat:'ML Nutrient',packs:[100],        unit:'g', note:'MLB rehydration for co-inoculation'},
+  'VP41':                         {cat:'ML Culture',packs:[2.5],       unit:'g', note:'O. oeni — 1 g/hL, rehydrated. One 2.5 g sachet per 66 gal'},
+  'ML Prime':                     {cat:'ML Culture',packs:[25],        unit:'g', note:'L. plantarum — direct-add, no rehydration. One 25 g pack per 66 gal'},
   'Bentonite':                    {cat:'Fining',     packs:[454,2270],   unit:'g', note:'Adsorbs enzymes and strips tannin'},
   'Sparkolloid':                  {cat:'Fining',     packs:[113,454],    unit:'g', note:'Hot-mix, slow, compact lees'},
   'Potassium Sorbate':            {cat:'Stabilizer', packs:[50,454],     unit:'g', note:'Never on a wine that has seen MLF'},
@@ -797,7 +810,7 @@ const CHEM_CATALOG = {
 // Custom products live in S.customProducts, keyed by name. Renaming one
 // rewrites every protocol addition that referenced the old name, so a rename
 // never silently orphans a line item on the shopping list.
-const PRODUCT_CATS = ['SO₂','Enzyme','Enhancer','Tannin','Nutrient','ML Nutrient','Fining','Stabilizer','Acid','Oak','Other'];
+const PRODUCT_CATS = ['SO₂','Enzyme','Enhancer','Tannin','Nutrient','ML Nutrient','ML Culture','Fining','Stabilizer','Acid','Oak','Other'];
 const PRODUCT_UNITS = ['g','mL','kit','ea'];
 
 function productCatalog(){
@@ -946,6 +959,19 @@ const YEAST_TRAITS = {
   d80:     {killer:false, so2Prod:false},
 };
 function yeastTraits(id){ return Object.assign({killer:false,so2Prod:false,malicConsumer:false}, YEAST_TRAITS[id]||{}); }
+
+// ML bacteria traits, for the strains whose limits actually drive a decision.
+// A strain that isn't listed falls back to the generic MLF thresholds, so this
+// table can stay short and certain rather than long and half-remembered.
+//   phMin    — below this the strain stops working, whatever else is right
+//   so2Max   — total SO₂ the strain tolerates, ppm
+//   alcMax   — alcohol tolerance, % v/v
+//   restart  — can it be used to finish a stalled MLF in dry wine?
+const MLB_STRAINS = {
+  'VP41':     {species:'O. oeni',      phMin:3.10, so2Max:60, alcMax:16.0, tempF:[64,77], restart:true},
+  'ML Prime': {species:'L. plantarum', phMin:3.40, so2Max:50, alcMax:15.5, tempF:[68,80], restart:false},
+};
+function mlbStrain(name){ return MLB_STRAINS[name]||null; }
 // '15–35°C' → 59 (min °F)
 function yeastMinF(y){
   const m=(y&&y.temp||'').match(/(\d+)/);
@@ -988,33 +1014,69 @@ const PROTOCOL_PRESETS = [
   ],
 },
 {
-  id:'red-coinoc-ml', name:'Red — co-inoculated (simultaneous) MLF', color:'red', builtin:true,
-  source:'Lallemand co-inoculation practice',
-  desc:'ML culture goes in 24–48 h after the yeast and finishes with the primary. No secondary vessel needed.',
+  id:'red-coinoc-ml', name:'Red — co-inoculated MLF (VP41)', color:'red', builtin:true,
+  source:'Lallemand VP41 co-inoculation, 2026 revision',
+  desc:'Default co-inoculation for high-Brix reds and any lot under pH 3.4. O. oeni tolerant to 16% alc, pH 3.1, 60 ppm total SO₂. Falls back to sequential if the co-inoc stalls, so it is the low-regret choice.',
   ferment:{yeastStrategy:'cultured',bioprotection:null,coldSoakDays:0,macerate:true,pressAt:'dryness'},
   mlf:{mode:'simultaneous',culture:'VP41',nutrient:'Acti-ML'},
   post:{coldStabilize:false,filter:'none'},
   additions:[
-    {stage:'crush',      product:'Potassium Metabisulfite (KMS)',rate:0.20,basis:'gal_must',note:'Hold to ~30 ppm — MLB is SO₂-sensitive'},
+    {stage:'crush',      product:'Potassium Metabisulfite (KMS)',rate:0.25,basis:'gal_must',note:'~38 ppm. VP41 tolerates 60 ppm total; keep under 45 ppm or hold ferment at 64–72°F.'},
+    {stage:'crush',      product:'Lallzyme EX',                  rate:0.10,basis:'gal_must'},
+    {stage:'crush',      product:'Opti-Red',                     rate:1.00,basis:'gal_must'},
+    {stage:'crush',      product:'Tartaric Acid',                rate:0,   basis:'gal_must',benchTrial:true,note:'Bench-trial to target. Safe at crush with VP41 (pH floor 3.1), but leave headroom — MLF will raise pH again.'},
+    {stage:'postcrush',  product:'FT Rouge',                     rate:1.30,basis:'gal_must',min:0.8,max:1.9,note:'8 h after the enzyme'},
+    {stage:'inoculation',product:'Go-Ferm Protect',              rate:1.25,basis:'gal_must'},
+    {stage:'ml',         product:'VP41',                         rate:0.04,basis:'gal_must',note:'1 g/hL. Rehydrate 15 min in 20× chlorine-free water at ~68°F, then add 24–48 h after yeast pitch.'},
+    {stage:'ml',         product:'Acti-ML',                      rate:0.75,basis:'gal_must',note:'20 g/hL, with the bacteria.'},
+    {stage:'ferment',    product:'Fermaid O',                    rate:0.95,basis:'gal_must',note:'At ⅓ sugar depletion. Organic N is gentler on co-inoculated MLB.'},
+    {stage:'postml',     product:'Potassium Metabisulfite (KMS)',rate:0.33,basis:'gal_wine',note:'Only after BOTH ferments test dry'},
+  ],
+  steps:[
+    'Crush and destem at ~38 ppm SO₂.',
+    'Lallzyme EX, then Opti-Red. FT Rouge 8 h after the enzyme.',
+    'Correct pH/TA/Brix at 12–24 h. Tartaric is fine here — target no lower than 3.3 so MLF has somewhere to go.',
+    'Rehydrate and inoculate the yeast with Go-Ferm Protect.',
+    '24–48 h later, once fermentation is clearly active: rehydrate VP41, add with Acti-ML.',
+    'Hold 64–72°F if potential alcohol is over 15.5% or total SO₂ is over 45 ppm; otherwise 68–77°F is fine.',
+    'Fermaid O at ⅓ sugar depletion. Avoid DAP spikes.',
+    'Cap management as usual. Press at dryness.',
+    'Test malic weekly. If it has not moved by day 14, press at dryness and let VP41 finish sequentially in barrel — it tolerates 16% and is the recommended strain for restarts.',
+    'Hold all SO₂ until malic reads below 0.03 g/L.',
+    'SO₂ to 30–35 ppm free, rack to aging.',
+  ],
+},
+{
+  id:'red-coinoc-mlprime', name:'Red — co-inoculated MLF (ML Prime)', color:'red', builtin:true,
+  source:'Lallemand ML Prime co-inoculation, 2026 revision',
+  desc:'High-pH, low-acid reds. L. plantarum goes in 24 h after the yeast and finishes MLF in 3–10 days, during primary. Requires pH ≥3.4 at pitch — NO acid additions until malic is done.',
+  ferment:{yeastStrategy:'cultured',bioprotection:null,coldSoakDays:0,macerate:true,pressAt:'dryness'},
+  mlf:{mode:'simultaneous',culture:'ML Prime',nutrient:null},
+  post:{coldStabilize:false,filter:'none'},
+  additions:[
+    {stage:'crush',      product:'Potassium Metabisulfite (KMS)',rate:0.20,basis:'gal_must',note:'~30 ppm. ML Prime tolerates 50 ppm total, so this is comfortable.'},
     {stage:'crush',      product:'Lallzyme EX',                  rate:0.10,basis:'gal_must'},
     {stage:'crush',      product:'Opti-Red',                     rate:1.00,basis:'gal_must'},
     {stage:'postcrush',  product:'FT Rouge',                     rate:1.30,basis:'gal_must',min:0.8,max:1.9,note:'8 h after the enzyme'},
     {stage:'inoculation',product:'Go-Ferm Protect',              rate:1.25,basis:'gal_must'},
-    {stage:'inoculation',product:'Acti-ML',                      rate:0.40,basis:'gal_must',note:'ML rehydration, 24–48 h after the yeast'},
-    {stage:'ferment',    product:'Fermaid O',                    rate:0.95,basis:'gal_must',note:'Organic N is gentler on co-inoculated MLB'},
+    {stage:'ml',         product:'ML Prime',                     rate:0.38,basis:'gal_must',note:'24 h after yeast pitch. No rehydration — dry onto the cap. Pack is sized for 66 gal; split across lots crushed the same day. Cannot multiply in wine, so do not under-dose.'},
+    {stage:'ferment',    product:'Fermaid O',                    rate:0.95,basis:'gal_must',note:'At ⅓ sugar depletion. Organic N only — no DAP spikes.'},
+    {stage:'postml',     product:'Tartaric Acid',                rate:0,   basis:'gal_wine',benchTrial:true,note:'HOLD until malic reads below 0.03 g/L. Bench-trial to target then. Adding at crush drops pH under 3.4 and kills this protocol.'},
     {stage:'postml',     product:'Potassium Metabisulfite (KMS)',rate:0.33,basis:'gal_wine',note:'Only after BOTH ferments test dry'},
   ],
   steps:[
     'Crush and destem with reduced SO₂ (~30 ppm).',
-    'Lallzyme EX, then Opti-Red.',
-    'Correct pH/TA/Brix at 12–24 h. FT Rouge 8 h after the enzyme.',
+    'Lallzyme EX, then Opti-Red. FT Rouge 8 h after the enzyme.',
+    'GATE: measure pH at 12–24 h. If below 3.4, stop and use the VP41 protocol instead. Do not acidify to fix pH — do not acidify at all yet.',
+    'Correct Brix only if needed. Leave pH and TA alone.',
     'Rehydrate and inoculate the yeast with Go-Ferm Protect.',
-    '24–48 h later, once fermentation is clearly active: inoculate the ML culture with Acti-ML.',
-    'Fermaid O at ⅓ sugar depletion. Avoid DAP spikes entirely.',
-    'Cap management as usual, 68–75°F.',
-    'Press at dryness. MLF normally finishes within 1–2 weeks.',
-    'Test malic. Hold all SO₂ until it reads below 0.03 g/L.',
-    'SO₂ to 30–35 ppm free, rack to aging.',
+    '24 h later, once fermentation is clearly active: add ML Prime, dry, to the cap surface.',
+    'Hold 68–80°F through primary. Below 68°F ML Prime stalls; above 80°F it is stressed.',
+    'Do not blend, combine, or top fermenting lots after the bacteria go in.',
+    'Fermaid O at ⅓ sugar depletion. Avoid DAP entirely.',
+    'Cap management as usual. Press at dryness.',
+    'Test malic — expect it done by day 3–10. Hold all SO₂ until it reads below 0.03 g/L.',
+    'Now bench-trial tartaric and correct pH/TA. Then SO₂ to 30–35 ppm free and rack to aging.',
   ],
 },
 {
@@ -1395,10 +1457,21 @@ function checkProtocol(p,ctx){
     add('error','SO2_BIOPROTECT',
       `${ferm.bioprotection} is here to do the job SO₂ would do, but the protocol also adds about ${ppm(crushSO2)} ppm at crush. The two cancel out.`,
       'Remove the crush SO₂ addition, or drop the bioprotection strain.');
-  if(mlf.mode==='simultaneous'&&crushSO2>0.27)
-    add('warn','SO2_COINOC',
-      `Co-inoculated ML bacteria will struggle at about ${ppm(crushSO2)} ppm SO₂.`,
-      'Hold crush SO₂ to 30 ppm (0.20 g/gal) or less.');
+  const mlb=mlbStrain(mlf.culture);
+  if(mlf.mode==='simultaneous'&&crushSO2>0){
+    // A known strain is judged against its own ceiling; anything else falls
+    // back to the conservative generic limit.
+    const ceiling=mlb?mlb.so2Max:60, comfortable=mlb?Math.round(mlb.so2Max*0.75):41;
+    const p0=ppm(crushSO2);
+    if(p0>ceiling)
+      add('error','SO2_COINOC_OVER',
+        `Crush SO₂ is about ${p0} ppm and ${mlf.culture||'the ML culture'} tolerates ${ceiling} ppm total. The bacteria will not establish.`,
+        `Drop the crush addition to ${(Math.round(ceiling*0.6*0.0066*100)/100).toFixed(2)} g/gal or less, or run the MLF consecutively.`);
+    else if(p0>comfortable)
+      add('warn','SO2_COINOC',
+        `Crush SO₂ is about ${p0} ppm. ${mlf.culture||'The ML culture'} tolerates ${ceiling} ppm total, so this leaves little headroom once the yeast contributes its own.`,
+        `Hold crush SO₂ to ${comfortable} ppm or less, or keep the ferment at 64–72°F to compensate.`);
+  }
 
   // ── Bioprotection strains do not finish ferments ──
   if(ferm.bioprotection&&ferm.yeastStrategy==='native')
@@ -1433,12 +1506,53 @@ function checkProtocol(p,ctx){
     if(post.coldStabilize&&mlf.mode==='consecutive')
       add('warn','COLDSTAB_MLF','Cold stabilization stalls MLF. Any malic left behind will restart in the bottle.',
         'Confirm malic is below 0.03 g/L before you chill.');
-    if(ctx.pH!=null&&ctx.pH<3.10)
-      add('warn','MLF_LOW_PH',`pH ${ctx.pH} is below the practical floor for most ML strains.`,
-        'Use VP41 or Enoferm Alpha, hold at 68–72°F, and expect it to be slow.');
-    if(ctx.potentialAlc!=null&&ctx.potentialAlc>15)
-      add('warn','MLF_HIGH_ALC',`Potential alcohol of ${ctx.potentialAlc.toFixed(1)}% is above the tolerance of most ML bacteria.`,
-        'VP41 handles about 16%. Co-inoculating before the alcohol climbs is the safer route.');
+    if(mlb){
+      if(ctx.pH!=null&&ctx.pH<mlb.phMin)
+        add('warn','MLF_LOW_PH',`pH ${ctx.pH} is below ${mlf.culture}'s floor of ${mlb.phMin.toFixed(2)}.`,
+          mlb.phMin>3.2?'Use VP41 instead — it works down to pH 3.1.'
+                       :'Hold at 68–72°F and expect it to be slow.');
+      if(ctx.potentialAlc!=null&&ctx.potentialAlc>mlb.alcMax)
+        add('warn','MLF_HIGH_ALC',`Potential alcohol of ${ctx.potentialAlc.toFixed(1)}% is above ${mlf.culture}'s ${mlb.alcMax}% tolerance.`,
+          'Co-inoculate before the alcohol climbs, or pick a more tolerant strain.');
+      // A pH floor this high is the whole design of the protocol, not a detail
+      if(mlb.phMin>=3.4&&mlf.mode==='simultaneous')
+        add('info','MLB_PH_GATE',
+          `${mlf.culture} needs pH ${mlb.phMin.toFixed(2)} or above at pitch, and this protocol has no way to raise pH before the bacteria go in.`,
+          'Measure pH 12–24 h after crush. Below the floor, switch this lot to the VP41 co-inoculation — do not acidify your way into it.');
+      if(!mlb.restart)
+        add(mlf.mode==='consecutive'?'error':'info',
+          mlf.mode==='consecutive'?'MLB_NOT_SEQUENTIAL':'MLB_NO_RESTART',
+          mlf.mode==='consecutive'
+            ? `${mlf.culture} (${mlb.species}) works in the fermenting must, not in finished wine. It will not carry a consecutive MLF.`
+            : `${mlf.culture} (${mlb.species}) cannot restart a stalled MLF once the wine is dry, so this protocol has no fallback to itself.`,
+          mlf.mode==='consecutive'
+            ? 'Switch MLF to co-inoculated, or use VP41 for a consecutive one.'
+            : 'If malic has not moved by dryness, re-inoculate with VP41 rather than more of this.');
+    } else {
+      if(ctx.pH!=null&&ctx.pH<3.10)
+        add('warn','MLF_LOW_PH',`pH ${ctx.pH} is below the practical floor for most ML strains.`,
+          'Use VP41 or Enoferm Alpha, hold at 68–72°F, and expect it to be slow.');
+      if(ctx.potentialAlc!=null&&ctx.potentialAlc>15)
+        add('warn','MLF_HIGH_ALC',`Potential alcohol of ${ctx.potentialAlc.toFixed(1)}% is above the tolerance of most ML bacteria.`,
+          'VP41 handles about 16%. Co-inoculating before the alcohol climbs is the safer route.');
+    }
+    // ── Acid before the malic is gone ──
+    // MLF eats malic and raises pH. Acidifying first fights that, and on a
+    // high-floor strain it takes the wine straight below the strain's limit.
+    if(mlf.mode==='simultaneous'){
+      const acids=adds.filter(a=>productInfo(a.product).cat==='Acid'
+        &&!/carbonate|bicarbonate/i.test(a.product)
+        &&(+a.rate>0||a.benchTrial)
+        &&a.stage!=='postml'&&a.stage!=='aging'&&a.stage!=='prebottle');
+      if(acids.length&&mlb&&mlb.phMin>=3.4)
+        add('error','ACID_BEFORE_MLF',
+          `${acids[0].product} is scheduled at “${PROTO_STAGE_LABEL[acids[0].stage]||acids[0].stage}”, while the bacteria are still working. ${mlf.culture} stops below pH ${mlb.phMin.toFixed(2)} and acidifying is how a borderline lot gets there.`,
+          'Move the acid to “After ML completes” and bench-trial it once malic reads below 0.03 g/L.');
+      else if(acids.length)
+        add('info','ACID_BEFORE_MLF_HEADROOM',
+          `${acids[0].product} goes in before MLF finishes, and MLF will raise pH again as malic converts.`,
+          'Leave headroom — target no lower than pH 3.3 at crush, then correct properly after malic is done.');
+    }
     if(mlf.mode==='consecutive'&&!mlf.nutrient&&mlf.culture!=='native')
       add('info','MLF_NO_NUTRIENT','A consecutive MLF starts in a nutrient-depleted wine.',
         'Add Opti-Malo with the culture.');
@@ -1571,15 +1685,24 @@ function calcProtocolChemicals(opts){
     const vol=lineVolumes(line,actualMust(trackingRec(line.key),line));
     (p.additions||[]).forEach(a=>{
       if(a.optional&&!includeOptional) return;
+      const info=productInfo(a.product);
+      // ML cultures are bought as sachets sized by volume treated, and
+      // calcProtocolBiologicals already counts them. Billing the grams here
+      // too would put the same pack on the list twice.
+      if(info.cat==='ML Culture') return;
       const base=vol[a.basis]; if(base==null) return;
-      const qty=(+a.rate||0)*base; if(!(qty>0)) return;
+      const qty=(+a.rate||0)*base;
+      // A bench-trial line carries no rate on purpose — you still have to own
+      // the product on crush day, so it stays on the list without a number.
+      if(!(qty>0)&&!a.benchTrial) return;
       if(!rows.has(a.product)) rows.set(a.product,{
-        product:a.product, cat:productInfo(a.product).cat||'Other',
-        unit:productInfo(a.product).unit||'g',
-        note:productInfo(a.product).note||'', total:0, uses:[]});
+        product:a.product, cat:info.cat||'Other',
+        unit:info.unit||'g',
+        note:info.note||'', total:0, benchTrial:false, uses:[]});
       const r=rows.get(a.product);
+      if(a.benchTrial) r.benchTrial=true;
       r.total+=qty;
-      r.uses.push({batch:trackLineName(line), protocol:p.name, stage:a.stage, qty});
+      r.uses.push({batch:trackLineName(line), protocol:p.name, stage:a.stage, qty, benchTrial:!!a.benchTrial});
     });
   });
   return [...rows.values()].map(r=>{
@@ -1610,8 +1733,14 @@ function calcProtocolBiologicals(){
     const vol=lineVolumes(line,actualMust(trackingRec(line.key),line));
     if(p.ferment&&p.ferment.bioprotection)
       bump(p.ferment.bioprotection,'Bioprotection',vol.gal_must,line,p.name,'≈1 g/gal at crush');
-    if(p.mlf&&p.mlf.mode!=='none'&&p.mlf.culture&&p.mlf.culture!=='native')
-      bump(p.mlf.culture,'ML Culture',vol.gal_wine,line,p.name,'Volume to inoculate — typically one sachet per 66 gal');
+    if(p.mlf&&p.mlf.mode!=='none'&&p.mlf.culture&&p.mlf.culture!=='native'){
+      // Co-inoculated bacteria go into the fermenter, so they have to treat the
+      // must volume. A consecutive MLF only ever sees what came off the press.
+      const coinoc=p.mlf.mode==='simultaneous';
+      bump(p.mlf.culture,'ML Culture',coinoc?vol.gal_must:vol.gal_wine,line,p.name,
+        coinoc?'Volume to inoculate — must volume, the bacteria go in during primary. Typically one sachet per 66 gal'
+              :'Volume to inoculate — typically one sachet per 66 gal');
+    }
   });
   return [...rows.values()].map(r=>{
     r.total=Math.round(r.total*100)/100;
@@ -1664,7 +1793,9 @@ function shoppingListCSV(){
   const head=['Have it','Category','Item','Needed','Buy (+10%)','Unit','Suggested pack','Used for','Notes'];
   const lines=[head.join(',')];
   list.forEach(r=>lines.push([
-    r.purchased?'YES':'', r.cat, r.product, r.total, r.buy, r.unit, r.pack||'',
+    r.purchased?'YES':'', r.cat, r.product,
+    r.benchTrial&&!(r.total>0)?'bench trial':r.total,
+    r.benchTrial&&!(r.total>0)?'':r.buy, r.unit, r.pack||'',
     r.uses.map(u=>`${u.batch} (${Math.round(u.qty*100)/100} ${r.unit})`).join('; '),
     r.note||'',
   ].map(csvCell).join(',')));
@@ -3836,8 +3967,8 @@ function renderTrackingDetail(line){
         return `<tr><td style="font-size:11px">${PROTO_STAGE_LABEL[a.stage]||a.stage}</td>
           <td class="txt-b">${esc(a.product)}${a.optional?' <span class="txt-m" style="font-size:10px">(optional)</span>':''}
           ${a.note?`<div class="txt-s txt-m" style="font-size:10px">${esc(a.note)}</div>`:''}</td>
-          <td style="font-size:11px">${a.rate} g ${PROTO_BASIS[a.basis]}</td>
-          <td><b>${q} g</b></td></tr>`; }).join('')}
+          <td style="font-size:11px">${a.benchTrial?'bench trial':`${a.rate} g ${PROTO_BASIS[a.basis]}`}</td>
+          <td><b>${a.benchTrial?'—':`${q} g`}</b></td></tr>`; }).join('')}
       </tbody></table></details>`:''}
 
     <div class="sdiv">🦠 Malolactic Fermentation</div>
@@ -5527,6 +5658,7 @@ function renderProtocolDetail(p){
     <td><select class="fc" style="font-size:11px" onchange="setProtoAdd('${p.id}',${i},'basis',this.value)">
       ${Object.entries(PROTO_BASIS).map(([k,l])=>`<option value="${k}" ${a.basis===k?'selected':''}>${l}</option>`).join('')}</select></td>
     <td style="text-align:center"><input type="checkbox" ${a.optional?'checked':''} onchange="setProtoAdd('${p.id}',${i},'optional',this.checked)" title="Optional — excluded from the shopping list unless you ask for it"></td>
+    <td style="text-align:center"><input type="checkbox" ${a.benchTrial?'checked':''} onchange="setProtoAdd('${p.id}',${i},'benchTrial',this.checked)" title="Bench trial — the rate is decided at the bench, so the product stays on the shopping list with no quantity"></td>
     <td><input class="fc" value="${esc(a.note||'')}" style="font-size:11px;min-width:150px" onchange="setProtoAdd('${p.id}',${i},'note',this.value)"></td>
     <td><button class="btn btn-d btn-sm" onclick="delProtoAddition('${p.id}',${i})">✕</button></td>
   </tr>`).join('');
@@ -5592,7 +5724,7 @@ function renderProtocolDetail(p){
             ${Object.entries(MLF_LABEL).map(([k,l])=>`<option value="${k}" ${p.mlf.mode===k?'selected':''}>${l}</option>`).join('')}</select></div>
         <div class="fg"><label class="lbl">ML culture</label>
           <select class="fc" ${p.mlf.mode==='none'?'disabled':''} onchange="setProtoField('${p.id}','mlf.culture',this.value)">
-            ${['VP41','CH16','Enoferm Alpha','Beta','native',''].map(v=>`<option value="${v}" ${(p.mlf.culture||'')===v?'selected':''}>${v==='native'?'Native / spontaneous':(v||'— none —')}</option>`).join('')}</select></div>
+            ${['VP41','ML Prime','CH16','Enoferm Alpha','Beta','native',''].map(v=>`<option value="${v}" ${(p.mlf.culture||'')===v?'selected':''}>${v==='native'?'Native / spontaneous':(v||'— none —')}</option>`).join('')}</select></div>
         <div class="fg"><label class="lbl">Filtration</label>
           <select class="fc" onchange="setProtoField('${p.id}','post.filter',this.value)">
             ${['none','5 µm','1 µm','0.45 µm'].map(v=>`<option value="${v}" ${p.post.filter===v?'selected':''}>${v==='none'?'None':v}</option>`).join('')}</select></div>
@@ -5614,9 +5746,9 @@ function renderProtocolDetail(p){
     <div class="panel" style="margin-top:12px">
       <div class="ph"><div class="pt">🧪 Addition schedule</div>
         <button class="btn btn-s btn-sm" onclick="addProtoAddition('${p.id}')">+ Addition</button></div>
-      <div class="info-note mb8" style="font-size:11px">Rates drive the Supplies shopping list. <b>per gal must</b> is pre-press volume; <b>per gal wine</b> is what's left after pressing. Optional rows stay out of the shopping list unless you switch them on there. Product not in the list? Add it in the <a href="#" onclick="S.ui.protocolId=null;render();return false" style="color:var(--burg);font-weight:bold">Product Library</a> and it will show up here.</div>
+      <div class="info-note mb8" style="font-size:11px">Rates drive the Supplies shopping list. <b>per gal must</b> is pre-press volume; <b>per gal wine</b> is what's left after pressing. Optional rows stay out of the shopping list unless you switch them on there. <b>Bench</b> rows have no rate by design — they still appear on the shopping list so you own the product, with the quantity decided at the bench. ML cultures are counted by volume treated under <b>ML Culture</b>, not by weight here. Product not in the list? Add it in the <a href="#" onclick="S.ui.protocolId=null;render();return false" style="color:var(--burg);font-weight:bold">Product Library</a> and it will show up here.</div>
       ${(p.additions||[]).length?`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
-        <th>When</th><th>Product</th><th>Rate</th><th>Basis</th><th>Opt.</th><th>Note</th><th></th>
+        <th>When</th><th>Product</th><th>Rate</th><th>Basis</th><th>Opt.</th><th>Bench</th><th>Note</th><th></th>
       </tr></thead><tbody>${addRows}</tbody></table></div>`
       :'<div class="txt-s txt-m">No additions yet.</div>'}
     </div>
@@ -5728,8 +5860,8 @@ function renderShoppingList(){
       <td style="text-align:center"><input type="checkbox" ${r.purchased?'checked':''} onchange="togglePurchased('${jsStr(r.key)}')" title="Mark as bought"></td>
       <td class="txt-b" style="${r.purchased?'text-decoration:line-through':''}">${esc(r.product)}
         ${r.note?`<div class="txt-s txt-m" style="font-size:10px">${esc(r.note)}</div>`:''}</td>
-      <td><b>${r.total} ${r.unit}</b></td>
-      <td>${r.buy} ${r.unit}</td>
+      <td>${r.benchTrial&&!(r.total>0)?'<span class="txt-m" style="font-size:11px">bench trial</span>':`<b>${r.total} ${r.unit}</b>`}</td>
+      <td>${r.benchTrial&&!(r.total>0)?'—':`${r.buy} ${r.unit}`}</td>
       <td>${esc(r.pack||'')}</td>
       <td style="font-size:11px;color:var(--muted)">${r.uses.map(u=>esc(u.batch)).filter((v,i,a)=>a.indexOf(v)===i).join(' · ')}</td>
     </tr>`).join('')}`).join('');
